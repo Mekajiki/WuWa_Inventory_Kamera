@@ -99,6 +99,9 @@ def imageToString(
     bannedChars: str = None
 ) -> str:
     try:
+        # pad the image so text touching the crop edges is still found by the
+        # detection model (DBNet suppresses regions that touch the border)
+        image = cv2.copyMakeBorder(image, 10, 10, 10, 10, cv2.BORDER_REPLICATE)
         ocrResults = ocr(image)[0]
         
         banned_pattern = re.compile(f"[{re.escape(bannedChars)}]") if bannedChars else None

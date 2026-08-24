@@ -118,39 +118,38 @@ class DataUpdater(QObject):
 			json.dump(data, f, indent=4)
 
 	def updateItems(self):
-		if not (Path('data') / 'items.json').is_file():
-			logger.info('Updating items.json...')
-			try:
-				infoText = self.loadJson('MultiText.json')
-				itemInfo = self.loadJson('ItemInfo.json')
-				weaponInfo = self.loadJson('WeaponConf.json')
+		logger.info('Updating items.json...')
+		try:
+			infoText = self.loadJson('MultiText.json')
+			itemInfo = self.loadJson('ItemInfo.json')
+			weaponInfo = self.loadJson('WeaponConf.json')
 
-				items = {
-					infoText[item['Name']].lower().replace(' ', ''): {
-						'id': item['Id'],
-						'name': infoText[item['Name']],
-						'image': item['Icon'].split('/Image/')[1].rsplit('.', 1)[0] + '.png'
-					}
-					for item in itemInfo if item['Name'] in infoText
+			items = {
+				infoText[item['Name']].lower().replace(' ', ''): {
+					'id': item['Id'],
+					'name': infoText[item['Name']],
+					'image': item['Icon'].split('/Image/')[1].rsplit('.', 1)[0] + '.png'
 				}
-				weapons = {
-					infoText[weapon['WeaponName']].lower().replace(' ', ''): {
-						'id': weapon['ModelId'],
-						'name': infoText[weapon['WeaponName']],
-						'rarity': weapon['QualityId'],
-						'image': weapon['Icon'].split('/Image/')[1].rsplit('.', 1)[0] + '.png'
-					}
-					for weapon in weaponInfo if weapon['WeaponName'] in infoText
+				for item in itemInfo if item['Name'] in infoText
+			}
+			weapons = {
+				infoText[weapon['WeaponName']].lower().replace(' ', ''): {
+					'id': weapon['ModelId'],
+					'name': infoText[weapon['WeaponName']],
+					'rarity': weapon['QualityId'],
+					'image': weapon['Icon'].split('/Image/')[1].rsplit('.', 1)[0] + '.png'
 				}
+				for weapon in weaponInfo if weapon['WeaponName'] in infoText
+			}
 
-				self.saveJson(items, 'items.json')
-				self.saveJson(weapons, 'weapons.json')
+			self.saveJson(items, 'items.json')
+			self.saveJson(weapons, 'weapons.json')
 
-				itemsID.update(items)
-				weaponsID.update(weapons)
-				
-			except Exception as e:
-				logger.error(f'Failed to update items.json. Error: {e}', exc_info=True)
+			itemsID.update(items)
+			weaponsID.update(weapons)
+
+		except Exception as e:
+			logger.error(f'Failed to update items.json. Error: {e}', exc_info=True)
 
 	def updateJsonFromPattern(self, fileName: str, pattern: str, transformFunc):
 		logger.info(f'Updating {fileName}...')
@@ -260,7 +259,12 @@ class DataUpdater(QObject):
 
 	def run(self):
 		self.updateFiles()
-		if self.updated:
+		derivedFiles = (
+			'items.json', 'weapons.json', 'echoStats.json', 'sonataName.json',
+			'definedText.json', 'achievements.json', 'characters.json', 'echoes.json'
+		)
+		derivedMissing = any(not (Path('data') / f).is_file() for f in derivedFiles)
+		if self.updated or derivedMissing:
 			self.updateItems()
 			self.updateEchoStats()
 			self.updateSonata()

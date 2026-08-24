@@ -99,7 +99,9 @@ def processStats(image: np.ndarray, screenInfo: ScreenInfo, _cache: dict) -> dic
     if nameHash in _cache:
         names = _cache[nameHash]
     else:
-        names = imageToString(nameImage, allowedChars=string.ascii_letters).lower().split('\n')
+        # ban digits/punctuation instead of allowing ASCII letters only, so
+        # non-Latin stat names (e.g. Japanese) survive
+        names = imageToString(nameImage, bannedChars=string.digits + string.punctuation + ' ').lower().split('\n')
         names = matchStats(names)
         _cache[nameHash] = names
 

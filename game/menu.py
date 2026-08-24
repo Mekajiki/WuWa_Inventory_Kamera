@@ -27,7 +27,9 @@ class MainMenuController:
                 screenInfo.terminal.y,
                 screenInfo.terminal.w,
                 screenInfo.terminal.h,
-                screenInfo.monitor
+                screenInfo.monitor,
+                originX=screenInfo.originX,
+                originY=screenInfo.originY
             )
 
             result = imageToString(image, '').lower()

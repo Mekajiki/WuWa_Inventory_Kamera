@@ -16,7 +16,7 @@ def getShell(screenInfo: ScreenInfo):
 		screenInfo.shell.h
 	)
 
-	image = screenshot(xShell, yShell, wShell, hShell, screenInfo.monitor, True)
+	image = screenshot(xShell, yShell, wShell, hShell, screenInfo.monitor, True, originX=screenInfo.originX, originY=screenInfo.originY)
 
 	try: shell = int(imageToString(image, allowedChars=string.digits).strip())
 	except Exception as e:

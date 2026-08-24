@@ -105,7 +105,7 @@ def needToStop(tPID, completeFLAG):
 
 def scrapers(scraperEnabled: list, screenInfo: ScreenInfo, FLAG, queue: multiprocessing.Queue, START_DATE: str):
 	try:
-		controller = WindowsInputController(screenInfo.monitor)
+		controller = WindowsInputController(screenInfo.monitor, screenInfo.originX, screenInfo.originY)
 		resonator = dict()
 		inventory = dict()
 		failed = list()

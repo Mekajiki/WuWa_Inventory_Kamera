@@ -37,7 +37,7 @@ def achievementScraper(controller: WindowsInputController, screenInfo: ScreenInf
         controller.hotKey('ctrl', 'v', waitTime=.3)
         controller.leftClick(screenInfo.achievements.searchButton.x, screenInfo.achievements.searchButton.y, .6)
 
-        image = screenshot(width=screenInfo.width, height=screenInfo.height, monitor=screenInfo.monitor)
+        image = screenshot(width=screenInfo.width, height=screenInfo.height, monitor=screenInfo.monitor, originX=screenInfo.originX, originY=screenInfo.originY)
         achievement = processAchievement(image, screenInfo, achievementName, _cache)
         if achievement:
             achievements.append(achievement)

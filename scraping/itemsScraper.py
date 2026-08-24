@@ -77,7 +77,7 @@ def itemsScraper(START_DATE: str, controller: WindowsInputController, x: int, y:
                 center_y = screenInfo.items.start.y + (row * (screenInfo.items.start.h + screenInfo.offsets.page.y)) + screenInfo.items.start.h // 2
                 
                 controller.leftClick(center_x, center_y)
-                image = screenshot(width=screenInfo.width, height=screenInfo.height, monitor=screenInfo.monitor)
+                image = screenshot(width=screenInfo.width, height=screenInfo.height, monitor=screenInfo.monitor, originX=screenInfo.originX, originY=screenInfo.originY)
                 
                 item_inventory, item_failed, name = processItem(path, image, screenInfo, _cache)
                 inventory.update(item_inventory)
@@ -105,7 +105,7 @@ def itemsScraper(START_DATE: str, controller: WindowsInputController, x: int, y:
             center_y = screenInfo.items.start.y + (row * (screenInfo.items.start.h + screenInfo.offsets.page.y)) + screenInfo.items.start.h // 2
             
             controller.leftClick(center_x, center_y)
-            image = screenshot(width=screenInfo.width, height=screenInfo.height, monitor=screenInfo.monitor)
+            image = screenshot(width=screenInfo.width, height=screenInfo.height, monitor=screenInfo.monitor, originX=screenInfo.originX, originY=screenInfo.originY)
             
             item_inventory, item_failed, name = processItem(path, image, screenInfo, _cache)
             

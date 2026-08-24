@@ -21,11 +21,13 @@ class ScreenInfoObject:
         self.__dict__.update(state)
 
 class ScreenInfo:
-    def __init__(self, width: int | float, height: int | float, monitor: int = 1):
+    def __init__(self, width: int | float, height: int | float, monitor: int = 1, originX: int = 0, originY: int = 0):
         self.width = width
         self.height = height
         self.monitor = monitor
-        
+        self.originX = originX
+        self.originY = originY
+
         try:
             self.data = COORDINATES[self.getRatio()][(self.width, self.height)]
         except KeyError:
@@ -34,7 +36,7 @@ class ScreenInfo:
         self.data = self._convertToObject(self.data)
 
     def __reduce__(self):
-        return (self.__class__, (self.width, self.height, self.monitor))
+        return (self.__class__, (self.width, self.height, self.monitor, self.originX, self.originY))
 
     def _convertToObject(self, obj):
         if isinstance(obj, dict):

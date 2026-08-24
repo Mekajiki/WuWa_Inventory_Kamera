@@ -118,7 +118,7 @@ def scrapeSkills(controller: WindowsInputController, screenInfo: ScreenInfo, cha
     for index, skills in enumerate(screenInfo.characters.skillPositions):
         controller.leftClick(skills.x, skills.y)
 
-        image = screenshot(width=screenInfo.width, height=screenInfo.height, monitor=screenInfo.monitor, bw=True)
+        image = screenshot(width=screenInfo.width, height=screenInfo.height, monitor=screenInfo.monitor, originX=screenInfo.originX, originY=screenInfo.originY, bw=True)
 
         levelImage = image[screenInfo.characters.skillLevel.y:screenInfo.characters.skillLevel.y + screenInfo.characters.skillLevel.h, screenInfo.characters.skillLevel.x:screenInfo.characters.skillLevel.x + screenInfo.characters.skillLevel.w]
         levelHash = hash(levelImage.tobytes())
@@ -140,7 +140,7 @@ def scrapeSkills(controller: WindowsInputController, screenInfo: ScreenInfo, cha
         for y in range(1, 3):
             controller.leftClick(skills.x, skills.y - (screenInfo.characters.offsets.skillPosition.y * y), .6)
 
-            buttonImage = screenshot(screenInfo.characters.skillButton.x, screenInfo.characters.skillButton.y, screenInfo.characters.skillButton.w, screenInfo.characters.skillButton.h, monitor=screenInfo.monitor, bw=True)
+            buttonImage = screenshot(screenInfo.characters.skillButton.x, screenInfo.characters.skillButton.y, screenInfo.characters.skillButton.w, screenInfo.characters.skillButton.h, monitor=screenInfo.monitor, originX=screenInfo.originX, originY=screenInfo.originY, bw=True)
             buttonHash = hash(buttonImage.tobytes())
 
             if buttonHash in _cache:
@@ -163,7 +163,7 @@ def scrapeChain(controller: WindowsInputController, screenInfo: ScreenInfo, char
     for position in screenInfo.characters.chainPositions:
         controller.leftClick(position.x, position.y, .2)
 
-        statusImage = screenshot(screenInfo.characters.chainButton.x, screenInfo.characters.chainButton.y, screenInfo.characters.chainButton.w, screenInfo.characters.chainButton.h, monitor=screenInfo.monitor)
+        statusImage = screenshot(screenInfo.characters.chainButton.x, screenInfo.characters.chainButton.y, screenInfo.characters.chainButton.w, screenInfo.characters.chainButton.h, monitor=screenInfo.monitor, originX=screenInfo.originX, originY=screenInfo.originY)
         statusHash = hash(statusImage.tobytes())
         
         if statusHash in _cache:
@@ -230,7 +230,7 @@ def resonatorScraper(controller: WindowsInputController, screenInfo: ScreenInfo)
             for section in range(5):
                 controller.leftClick(xLeftSide, yLeftSide + (screenInfo.characters.offsets.leftSide.y * section), .8)
 
-                image = screenshot(width=screenInfo.width, height=screenInfo.height, monitor=screenInfo.monitor, bw=True)
+                image = screenshot(width=screenInfo.width, height=screenInfo.height, monitor=screenInfo.monitor, originX=screenInfo.originX, originY=screenInfo.originY, bw=True)
 
                 match(section):
                     case 0:
@@ -264,7 +264,7 @@ def resonatorScraper(controller: WindowsInputController, screenInfo: ScreenInfo)
         for section in range(5):
             controller.leftClick(xLeftSide, yLeftSide + (screenInfo.characters.offsets.leftSide.y * section), .8)
 
-            image = screenshot(width=screenInfo.width, height=screenInfo.height, monitor=screenInfo.monitor, bw=True)
+            image = screenshot(width=screenInfo.width, height=screenInfo.height, monitor=screenInfo.monitor, originX=screenInfo.originX, originY=screenInfo.originY, bw=True)
 
             match(section):
                 case 0:

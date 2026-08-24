@@ -42,16 +42,19 @@ def savingScraped(scannedData: dict = {'inventory_wuwainventorykamera.json': (IN
                 with open(filePATH, 'w', encoding='utf-8') as f:
                     json.dump(data, f)
 
-def screenshot(left: int = 0, top: int = 0, width: int = 0, height: int = 0, monitor: int = 1, bw: bool = False):
+def screenshot(left: int = 0, top: int = 0, width: int = 0, height: int = 0, monitor: int = 1, bw: bool = False, originX: int = None, originY: int = None):
 
     with mss.mss() as sct:
         mon = sct.monitors[monitor]
         if all(coord == 0 for coord in [top, left, width, height]):
             left, top, width, height = tuple(coord for coord in mon.values())
 
+        # originX/originY are the window's client-area origin in virtual-screen
+        # coordinates; when given, coordinates are window-relative instead of
+        # monitor-relative so windowed mode works.
         region = {
-            'left': mon['left'] + left,
-            'top': mon['top'] + top,
+            'left': (originX + left) if originX is not None else (mon['left'] + left),
+            'top': (originY + top) if originY is not None else (mon['top'] + top),
             'width': width,
             'height': height,
             'mon': monitor

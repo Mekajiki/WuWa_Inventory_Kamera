@@ -57,7 +57,7 @@ def getRarity(image: np.ndarray):
     return 1
 
 def getEchoPages(screenInfo: ScreenInfo) -> int:
-    image = screenshot(width=screenInfo.width, height=screenInfo.height, monitor=screenInfo.monitor)[screenInfo.echoes.page.y:screenInfo.echoes.page.y + screenInfo.echoes.page.h, screenInfo.echoes.page.x:screenInfo.echoes.page.x + screenInfo.echoes.page.w]
+    image = screenshot(width=screenInfo.width, height=screenInfo.height, monitor=screenInfo.monitor, originX=screenInfo.originX, originY=screenInfo.originY)[screenInfo.echoes.page.y:screenInfo.echoes.page.y + screenInfo.echoes.page.h, screenInfo.echoes.page.x:screenInfo.echoes.page.x + screenInfo.echoes.page.w]
     echoCount = imageToString(image, allowedChars=string.digits + '/').split('/')[0]
     
     try: return int(echoCount), int(np.ceil(int(echoCount) / 24))
@@ -130,7 +130,7 @@ def processStats(image: np.ndarray, screenInfo: ScreenInfo, _cache: dict) -> dic
 def getSonata(controller: WindowsInputController, screenInfo: ScreenInfo, _cache: dict):
     controller.moveMouse(screenInfo.echoes.mouseMovement.x, screenInfo.echoes.mouseMovement.y, .2)
     controller.mouseScroll(-screenInfo.scroll.sonata.y, .3)
-    image = screenshot(screenInfo.echoes.sonata.x, screenInfo.echoes.sonata.y, screenInfo.echoes.sonata.w, screenInfo.echoes.sonata.h, monitor=screenInfo.monitor)
+    image = screenshot(screenInfo.echoes.sonata.x, screenInfo.echoes.sonata.y, screenInfo.echoes.sonata.w, screenInfo.echoes.sonata.h, monitor=screenInfo.monitor, originX=screenInfo.originX, originY=screenInfo.originY)
     sonataHash = hash(image.tobytes())
 
     if sonataHash in _cache:
@@ -201,7 +201,7 @@ def echoScraper(controller: WindowsInputController, x: float, y: float, screenIn
                 center_y = screenInfo.echoes.start.y + (row * (screenInfo.echoes.start.h + screenInfo.offsets.page.y)) + screenInfo.echoes.start.h // 2
                 
                 controller.leftClick(center_x, center_y)
-                image = screenshot(width=screenInfo.width, height=screenInfo.height, monitor=screenInfo.monitor)
+                image = screenshot(width=screenInfo.width, height=screenInfo.height, monitor=screenInfo.monitor, originX=screenInfo.originX, originY=screenInfo.originY)
                 
                 continueScraping = processGridEcho(controller, screenInfo, echoes, image, _cache)
                 if not continueScraping:

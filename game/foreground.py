@@ -13,7 +13,7 @@ from properties.config import PROCESS_NAME, WINDOW_NAME
 logger = logging.getLogger('WindowManager')
 
 class WindowManager:
-	def __init__(self, windowName: str = WINDOW_NAME, preocessName: str = PROCESS_NAME):
+	def __init__(self, windowName: str|tuple[str, ...] = WINDOW_NAME, preocessName: str = PROCESS_NAME):
 		self.user32 = ctypes.WinDLL('user32', use_last_error=True)
 		self.windowName = windowName
 		self.preocessName = preocessName
@@ -21,8 +21,10 @@ class WindowManager:
 
 	def _findWindow(self) -> pwc.Window|None:
 		"""Finds the window by title and process name."""
-		for win in pwc.getWindowsWithTitle(title=self.windowName, app=self.preocessName, condition=pwc.Re.CONTAINS):
-			return win
+		titles = self.windowName if isinstance(self.windowName, (tuple, list)) else (self.windowName,)
+		for title in titles:
+			for win in pwc.getWindowsWithTitle(title=title, app=self.preocessName, condition=pwc.Re.CONTAINS):
+				return win
 		logger.debug(f"Window with WindowName: {self.windowName} and ProcessName: {self.preocessName}, not found.")
 		return None
 
@@ -56,18 +58,30 @@ class WindowManager:
 			return None
 	
 	def getScreenInfo(self) -> ScreenInfo:
-		width, height = self.getWindowSize() or (1920, 1080)
+		width, height, originX, originY = self.getClientArea()
 
 		DPI = self.getDPI()
 		monitor = self.window.getDisplay()[0] # ['\\\\.\\DISPLAY1']
 		match = re.search(r'\d+', monitor)
 		if match: monitor = int(match.group())
 		else: monitor = 1
-		
+
 		width = int(width / DPI)
 		height = int(height / DPI)
-		
-		return ScreenInfo(width, height, monitor)
+
+		return ScreenInfo(width, height, monitor, originX, originY)
+
+	def getClientArea(self) -> tuple[int, int, int, int]:
+		"""Return the client-area size and its top-left corner in virtual-screen coordinates."""
+		try:
+			_, _, width, height = win32gui.GetClientRect(self.window._hWnd)
+			originX, originY = win32gui.ClientToScreen(self.window._hWnd, (0, 0))
+			if width and height:
+				return width, height, originX, originY
+		except Exception as e:
+			logger.debug(f"Failed to get client area, falling back to window size: {e}")
+		width, height = self.getWindowSize() or (1920, 1080)
+		return width, height, 0, 0
 
 	def _getScreen(self) -> pmc.Monitor:
 		"""Return the primary screen object."""

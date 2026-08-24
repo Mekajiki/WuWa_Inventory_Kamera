@@ -15,7 +15,7 @@ ROWS, COLS = 4, 6
 WEAPON_ASCENSION_LEVELS = [20, 40, 50, 60, 70, 80, 90]
 
 def getWeaponPages(screenInfo: ScreenInfo) -> int:
-    image = convertToBlackWhite(screenshot(width=screenInfo.width, height=screenInfo.height, monitor=screenInfo.monitor)[screenInfo.weapons.page.y:screenInfo.weapons.page.y + screenInfo.weapons.page.h, screenInfo.weapons.page.x:screenInfo.weapons.page.x + screenInfo.weapons.page.w])
+    image = convertToBlackWhite(screenshot(width=screenInfo.width, height=screenInfo.height, monitor=screenInfo.monitor, originX=screenInfo.originX, originY=screenInfo.originY)[screenInfo.weapons.page.y:screenInfo.weapons.page.y + screenInfo.weapons.page.h, screenInfo.weapons.page.x:screenInfo.weapons.page.x + screenInfo.weapons.page.w])
     weaponCount = imageToString(image, '', allowedChars=string.digits + '/').split('/')[0]
     try:
         return int(weaponCount), int(np.ceil(int(weaponCount) / 24))
@@ -123,7 +123,7 @@ def weaponScraper(controller: WindowsInputController, x: float, y: float, screen
                 center_y = screenInfo.weapons.start.y + (row * (screenInfo.weapons.start.h + screenInfo.offsets.page.y)) + screenInfo.weapons.start.h // 2
                 
                 controller.leftClick(center_x, center_y)
-                image = screenshot(width=screenInfo.width, height=screenInfo.height, monitor=screenInfo.monitor)
+                image = screenshot(width=screenInfo.width, height=screenInfo.height, monitor=screenInfo.monitor, originX=screenInfo.originX, originY=screenInfo.originY)
                 
                 continueScraping = processGridItem(inventory, weapons, image, screenInfo, _cache)
                 if not continueScraping:

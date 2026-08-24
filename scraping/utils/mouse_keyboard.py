@@ -9,15 +9,20 @@ class WindowsInputController:
     A class to handle Windows input simulation including keyboard and mouse controls.
     """
     
-    def __init__(self, monitor: int = 1):
+    def __init__(self, monitor: int = 1, originX: int = None, originY: int = None):
         """
         Initialize WindowsInputController with monitor index.
-        
+
         Args:
             monitor (int): Monitor index to use for mouse operations
+            originX (int, optional): Window client-area origin X in virtual-screen
+                coordinates. When given, mouse coordinates are window-relative.
+            originY (int, optional): Window client-area origin Y.
         """
         self.sct = mss()
         self.monitor = self.sct.monitors[monitor]
+        self.originX = originX
+        self.originY = originY
     
     # Class-level constants
     KEYEVENTF_KEYDOWN = 0x0000
@@ -124,8 +129,12 @@ class WindowsInputController:
             y (Union[int, float]): Y-coordinate relative to monitor
             waitTime (float, optional): Time to wait after moving. Defaults to 0.1.
         """
-        x = int(x) + self.monitor["left"]
-        y = int(y) + self.monitor["top"]
+        if self.originX is not None:
+            x = int(x) + self.originX
+            y = int(y) + self.originY
+        else:
+            x = int(x) + self.monitor["left"]
+            y = int(y) + self.monitor["top"]
         win32api.SetCursorPos((x, y))
         time.sleep(waitTime)
     

@@ -104,6 +104,12 @@ def needToStop(tPID, completeFLAG):
 		time.sleep(.1)
 
 def scrapers(scraperEnabled: list, screenInfo: ScreenInfo, FLAG, queue: multiprocessing.Queue, START_DATE: str):
+	# The scraper runs in a spawned child process, which does not inherit the
+	# parent's logging config — without this, any exception here is invisible.
+	logging.basicConfig(
+		filename='logs/scraper.debug.log', level=logging.DEBUG,
+		format='%(asctime)s|%(levelname)s|%(name)s|%(message)s'
+	)
 	try:
 		controller = WindowsInputController(screenInfo.monitor, screenInfo.originX, screenInfo.originY)
 		resonator = dict()

@@ -47,9 +47,11 @@ def scrapeResonator(image: np.ndarray, screenInfo: ScreenInfo, characters: dict,
     else:
         resonatorName = imageToString(resonatorNameImage, '', bannedChars=' ').lower()
     
-        result = getMatches(resonatorName, charactersID, 1, 0.9)
+        result = getMatches(resonatorName, charactersID, 1, 0.9) or getMatches(resonatorName, charactersID, 1, 0.7)
         if result:
             resonatorName = result[0]
+        else:
+            logger.debug(f'Unmatched resonator name: {resonatorName!r}')
         
         roverName = cfg.get(cfg.roverName).replace(' ', '').lower()
         # OCR sometimes drops a trailing kana, so match the Rover name fuzzily
@@ -91,10 +93,14 @@ def scrapeWeapon(image: np.ndarray, screenInfo: ScreenInfo, characters: dict, re
     else:
         weaponName = imageToString(weaponNameImage, '', bannedChars=' ').lower()
     
-        result = getMatches(weaponName, weaponsID, 1, 0.9)
+        result = (getMatches(weaponName, weaponsID, 1, 0.9)
+                  or getMatches(weaponName, weaponsID, 1, 0.75)
+                  or getMatches(weaponName, weaponsID, 1, 0.6))
         if result:
             weaponName = result[0]
-        
+        else:
+            logger.debug(f'Unmatched weapon name: {weaponName!r}')
+
         weaponID = weaponsID.get(weaponName, {'id': weaponName})['id']
         _cache[weaponNameHash] = weaponID
     
@@ -119,10 +125,15 @@ def scrapeWeapon(image: np.ndarray, screenInfo: ScreenInfo, characters: dict, re
         _cache[rankHash] = rank
 
     try:
+        rankValue = int(rank)
+        if rankValue > 5:
+            # OCR sometimes appends stray digits from the description below
+            rankValue = int(rank[0])
+
         characters[resonatorID]['weapon']['id'] = weaponID
         characters[resonatorID]['weapon']['level'] = int(level[0])
         characters[resonatorID]['weapon']['ascension'] = ASCENSION_LEVELS.index(int(level[1]))
-        characters[resonatorID]['weapon']['rank'] = int(rank)
+        characters[resonatorID]['weapon']['rank'] = min(5, max(0, rankValue))
     except:
         logger.debug('Failed scraping the weapon')
 
@@ -219,7 +230,8 @@ def resonatorScraper(controller: WindowsInputController, screenInfo: ScreenInfo)
             resonatorID = str()
 
             for section in range(5):
-                controller.leftClick(xLeftSide, yLeftSide + (screenInfo.characters.offsets.leftSide.y * section), .8)
+                # the chain screen (section 4) plays a slide-in animation
+                controller.leftClick(xLeftSide, yLeftSide + (screenInfo.characters.offsets.leftSide.y * section), 1.5 if section == 4 else .8)
 
                 image = screenshot(width=screenInfo.width, height=screenInfo.height, monitor=screenInfo.monitor, originX=screenInfo.originX, originY=screenInfo.originY)
 

@@ -1,14 +1,16 @@
+import re
+import cv2
 import time
 import string
 import logging
 import numpy as np
-from difflib import get_close_matches as getMatches
+from difflib import SequenceMatcher, get_close_matches as getMatches
 from collections import defaultdict
 
 from scraping.utils import charactersID, weaponsID, definedText
 from scraping.utils import (
     screenshot, convertToBlackWhite, imageToString,
-    WindowsInputController
+    readTextBoxes, WindowsInputController
 )
 from game.screenInfo import ScreenInfo
 from properties.config import cfg
@@ -25,6 +27,16 @@ SKILL_LEGENDS = {
 }
 ASCENSION_LEVELS = [20, 40, 50, 60, 70, 80, 90]
 
+def splitLevel(text: str) -> list[str]:
+    """Split an OCR'd "level/cap" string; the slash is often lost, in which
+    case the last two digits are the (always two-digit) ascension cap."""
+    text = text.strip()
+    if '/' in text:
+        return text.split('/')
+    if len(text) > 2:
+        return [text[:-2], text[-2:]]
+    return [text]
+
 def scrapeResonator(image: np.ndarray, screenInfo: ScreenInfo, characters: dict, _cache: dict) -> tuple[str, bool]:
     resonatorNameImage = image[screenInfo.characters.resonatorName.y:screenInfo.characters.resonatorName.y + screenInfo.characters.resonatorName.h, screenInfo.characters.resonatorName.x:screenInfo.characters.resonatorName.x + screenInfo.characters.resonatorName.w]
     resonatorNameImage = convertToBlackWhite(resonatorNameImage)
@@ -39,20 +51,23 @@ def scrapeResonator(image: np.ndarray, screenInfo: ScreenInfo, characters: dict,
         if result:
             resonatorName = result[0]
         
-        resonatorID = '1502' if resonatorName == cfg.get(cfg.roverName).replace(' ', '').lower() else charactersID.get(resonatorName, resonatorName)
+        roverName = cfg.get(cfg.roverName).replace(' ', '').lower()
+        # OCR sometimes drops a trailing kana, so match the Rover name fuzzily
+        isRover = resonatorName == roverName or SequenceMatcher(None, resonatorName, roverName).ratio() >= .7
+        resonatorID = '1502' if isRover else charactersID.get(resonatorName, resonatorName)
         _cache[resonatorNameHash] = resonatorID
 
     if resonatorID in characters:
         return resonatorID, True
 
+    # keep the level crop in color: the gray "/90" cap is lost by binarization
     levelImage = image[screenInfo.characters.resonatorLevel.y:screenInfo.characters.resonatorLevel.y + screenInfo.characters.resonatorLevel.h, screenInfo.characters.resonatorLevel.x:screenInfo.characters.resonatorLevel.x + screenInfo.characters.resonatorLevel.w]
-    levelImage = convertToBlackWhite(levelImage)
     levelHash = hash(levelImage.tobytes())
 
     if levelHash in _cache:
         level = _cache[levelHash]
     else:
-        level = imageToString(levelImage, '', allowedChars=string.digits + '/').split('/')
+        level = splitLevel(imageToString(levelImage, '', allowedChars=string.digits + '/'))
         _cache[levelHash] = level
 
     try: ascensionLvl = ASCENSION_LEVELS.index(int(level[1]))
@@ -74,7 +89,7 @@ def scrapeWeapon(image: np.ndarray, screenInfo: ScreenInfo, characters: dict, re
     if weaponNameHash in _cache:
         weaponID = _cache[weaponNameHash]
     else:
-        weaponName = imageToString(weaponNameImage, bannedChars=' ').lower()
+        weaponName = imageToString(weaponNameImage, '', bannedChars=' ').lower()
     
         result = getMatches(weaponName, weaponsID, 1, 0.9)
         if result:
@@ -83,16 +98,16 @@ def scrapeWeapon(image: np.ndarray, screenInfo: ScreenInfo, characters: dict, re
         weaponID = weaponsID.get(weaponName, {'id': weaponName})['id']
         _cache[weaponNameHash] = weaponID
     
+    # keep the level crop in color: the gray "/90" cap is lost by binarization
     levelImage = image[screenInfo.characters.weaponLevel.y:screenInfo.characters.weaponLevel.y + screenInfo.characters.weaponLevel.h, screenInfo.characters.weaponLevel.x:screenInfo.characters.weaponLevel.x + screenInfo.characters.weaponLevel.w]
-    levelImage = convertToBlackWhite(levelImage)
     levelHash = hash(levelImage.tobytes())
     
     if levelHash in _cache:
         level = _cache[levelHash]
     else:
-        level = imageToString(levelImage, '', allowedChars=string.digits + '/').split('/')
+        level = splitLevel(imageToString(levelImage, '', allowedChars=string.digits + '/'))
         _cache[levelHash] = level
-    
+
     rankImage = image[screenInfo.characters.weaponRank.y:screenInfo.characters.weaponRank.y + screenInfo.characters.weaponRank.h, screenInfo.characters.weaponRank.x:screenInfo.characters.weaponRank.x + screenInfo.characters.weaponRank.w]
     rankImage = convertToBlackWhite(rankImage)
     rankHash = hash(rankImage.tobytes())
@@ -111,72 +126,48 @@ def scrapeWeapon(image: np.ndarray, screenInfo: ScreenInfo, characters: dict, re
     except:
         logger.debug('Failed scraping the weapon')
 
-def scrapeSkills(controller: WindowsInputController, screenInfo: ScreenInfo, characters: dict, resonatorID: str, _cache: dict):
+def scrapeSkills(image: np.ndarray, screenInfo: ScreenInfo, characters: dict, resonatorID: str, _cache: dict):
+    # Since 3.6 the skill screen shows every level directly on the tree
+    # ("Lv.X/10" under each node), so no clicking is needed. OCR one band
+    # containing all five labels and assign each to the nearest column —
+    # cropping the labels individually makes the OCR much less reliable.
+    strip = screenInfo.characters.skillStrip
+    stripImage = image[strip.y:strip.y + strip.h, strip.x:strip.x + strip.w]
+    stripHash = hash(stripImage.tobytes())
 
-    controller.leftClick(screenInfo.characters.skillClick.x, screenInfo.characters.skillClick.y, .5)
+    if stripHash in _cache:
+        levels = _cache[stripHash]
+    else:
+        columns = [column.x for column in screenInfo.characters.skillColumns]
+        levels = {}
+        for x0, y0, x1, y1, text in readTextBoxes(stripImage):
+            found = re.search(r'(\d+)\s*/\s*10', text)
+            if not found:
+                continue
+            xCenter = strip.x + (x0 + x1) / 2
+            index = min(range(len(columns)), key=lambda i: abs(columns[i] - xCenter))
+            levels[index] = int(found.group(1))
+        _cache[stripHash] = levels
 
-    for index, skills in enumerate(screenInfo.characters.skillPositions):
-        controller.leftClick(skills.x, skills.y)
+    for index in range(5):
+        if index not in levels:
+            logger.debug(f'Failed scraping skill level for column {index}')
+        characters[resonatorID]['skills'][SKILL_LEGENDS[index]] = levels.get(index, 1)
 
-        image = screenshot(width=screenInfo.width, height=screenInfo.height, monitor=screenInfo.monitor, originX=screenInfo.originX, originY=screenInfo.originY, bw=True)
-
-        levelImage = image[screenInfo.characters.skillLevel.y:screenInfo.characters.skillLevel.y + screenInfo.characters.skillLevel.h, screenInfo.characters.skillLevel.x:screenInfo.characters.skillLevel.x + screenInfo.characters.skillLevel.w]
-        levelHash = hash(levelImage.tobytes())
-        
-        if levelHash in _cache:
-            level = _cache[levelHash]
-        else:
-            level = imageToString(levelImage, '', allowedChars=string.digits)
-            _cache[levelHash] = level
-
-        try: level = int(level)
-        except:
-            level = 1
-            _cache[levelHash] = level
-            logger.debug('Failed scraping the skill level')
-
-        characters[resonatorID]['skills'][SKILL_LEGENDS[index]] = level
-
-        for y in range(1, 3):
-            controller.leftClick(skills.x, skills.y - (screenInfo.characters.offsets.skillPosition.y * y), .6)
-
-            buttonImage = screenshot(screenInfo.characters.skillButton.x, screenInfo.characters.skillButton.y, screenInfo.characters.skillButton.w, screenInfo.characters.skillButton.h, monitor=screenInfo.monitor, originX=screenInfo.originX, originY=screenInfo.originY, bw=True)
-            buttonHash = hash(buttonImage.tobytes())
-
-            if buttonHash in _cache:
-                button = _cache[button]
-            else:
-                button = imageToString(buttonImage).lower()
-                _cache[button] = button
-
-            if button.lower() == definedText['PrefabTextItem_3963945691_Text']: # MULTILANG
-                key = 'inherent' if index == 2 else f'stats{index}'
-                characters[resonatorID]['skills'][key] += 1
-            else:
-                break
-
-    controller.pressKey('esc')
-
-def scrapeChain(controller: WindowsInputController, screenInfo: ScreenInfo, characters: dict, resonatorID: str, _cache: dict):
-    controller.leftClick(screenInfo.characters.chainClick.x, screenInfo.characters.chainClick.y, .7)
-
+def scrapeChain(image: np.ndarray, screenInfo: ScreenInfo, characters: dict, resonatorID: str):
+    # Activated chain nodes glow cyan on the 3.6 chain screen; classify each
+    # node by the amount of saturated cyan around its center.
     for position in screenInfo.characters.chainPositions:
-        controller.leftClick(position.x, position.y, .2)
+        x, y = int(position.x), int(position.y)
+        patch = image[max(0, y - 14):y + 14, max(0, x - 14):x + 14]
+        hsv = cv2.cvtColor(patch, cv2.COLOR_RGB2HSV)
+        glow = cv2.inRange(hsv, (75, 60, 140), (115, 255, 255)).mean()
+        logger.debug(f'Chain node at ({x},{y}): glow={glow:.1f}')
 
-        statusImage = screenshot(screenInfo.characters.chainButton.x, screenInfo.characters.chainButton.y, screenInfo.characters.chainButton.w, screenInfo.characters.chainButton.h, monitor=screenInfo.monitor, originX=screenInfo.originX, originY=screenInfo.originY)
-        statusHash = hash(statusImage.tobytes())
-        
-        if statusHash in _cache:
-            status = _cache[statusHash]
-        else:
-            status = imageToString(statusImage, '', bannedChars=f'{string.punctuation} ').lower()
-            _cache[statusHash] = status
-
-        if status.lower() != definedText['PrefabTextItem_3963945691_Text']: # MULTILANG
+        if glow < 8:
             break
 
         characters[resonatorID]['chain'] += 1
-    controller.pressKey('esc')
 
 def resonatorScraper(controller: WindowsInputController, screenInfo: ScreenInfo):
     characters = defaultdict(
@@ -223,14 +214,14 @@ def resonatorScraper(controller: WindowsInputController, screenInfo: ScreenInfo)
     xRightSide, yRightSide = screenInfo.characters.rightSide.x, screenInfo.characters.rightSide.y
 
     while not isDouble:
-        for resonatorIndex in range(7):
+        for resonatorIndex in range(6):
             controller.leftClick(xRightSide, yRightSide + (screenInfo.characters.offsets.rightSide.y * resonatorIndex), .7)
             resonatorID = str()
 
             for section in range(5):
                 controller.leftClick(xLeftSide, yLeftSide + (screenInfo.characters.offsets.leftSide.y * section), .8)
 
-                image = screenshot(width=screenInfo.width, height=screenInfo.height, monitor=screenInfo.monitor, originX=screenInfo.originX, originY=screenInfo.originY, bw=True)
+                image = screenshot(width=screenInfo.width, height=screenInfo.height, monitor=screenInfo.monitor, originX=screenInfo.originX, originY=screenInfo.originY)
 
                 match(section):
                     case 0:
@@ -242,9 +233,9 @@ def resonatorScraper(controller: WindowsInputController, screenInfo: ScreenInfo)
                     case 2:
                         pass  # Skip echoes for now
                     case 3:
-                        scrapeSkills(controller, screenInfo, characters, resonatorID, _cache)
+                        scrapeSkills(image, screenInfo, characters, resonatorID, _cache)
                     case 4:
-                        scrapeChain(controller, screenInfo, characters, resonatorID, _cache)
+                        scrapeChain(image, screenInfo, characters, resonatorID)
                 time.sleep(.5)
 
             if isDouble:
@@ -257,14 +248,14 @@ def resonatorScraper(controller: WindowsInputController, screenInfo: ScreenInfo)
         controller.mouseScroll(screenInfo.scroll.characters.y, .5)
     
     # Process last page
-    for resonatorIndex in range(6, -1, -1):
+    for resonatorIndex in range(5, -1, -1):
         controller.leftClick(xRightSide, yRightSide + (screenInfo.characters.offsets.rightSide.y * resonatorIndex), .7)
         resonatorID = str()
-        
+
         for section in range(5):
             controller.leftClick(xLeftSide, yLeftSide + (screenInfo.characters.offsets.leftSide.y * section), .8)
 
-            image = screenshot(width=screenInfo.width, height=screenInfo.height, monitor=screenInfo.monitor, originX=screenInfo.originX, originY=screenInfo.originY, bw=True)
+            image = screenshot(width=screenInfo.width, height=screenInfo.height, monitor=screenInfo.monitor, originX=screenInfo.originX, originY=screenInfo.originY)
 
             match(section):
                 case 0:
@@ -276,9 +267,9 @@ def resonatorScraper(controller: WindowsInputController, screenInfo: ScreenInfo)
                 case 2:
                     pass  # Skip echoes for now
                 case 3:
-                    scrapeSkills(controller, screenInfo, characters, resonatorID, _cache)
+                    scrapeSkills(image, screenInfo, characters, resonatorID, _cache)
                 case 4:
-                    scrapeChain(controller, screenInfo, characters, resonatorID, _cache)
+                    scrapeChain(image, screenInfo, characters, resonatorID)
 
             time.sleep(.5)
         

@@ -60,37 +60,37 @@ COORDINATES = {
                 "achievementsTab": Coordinates(835, 570),
             },
             "characters": {
+                # Layout measured against the 3.6 client (2026-08). The skill
+                # screen now shows levels directly on the tree, so skills and
+                # chains are read from screenshots without clicking nodes.
                 "offsets": {
                     "leftSide": Coordinates(y=136),
-                    "rightSide": Coordinates(y=106),
-                    "skillPosition": Coordinates(y=255)
+                    "rightSide": Coordinates(y=134)
                 },
                 "leftSide": Coordinates(82, 191),
-                "rightSide": Coordinates(1814, 203.50),
-                "resonatorName": Coordinates(250, 110, 280, 50),
-                "resonatorLevel": Coordinates(180, 200, 135, 80),
-                "weaponName": Coordinates(257, 126, 273, 34),
-                "weaponLevel": Coordinates(255, 160, 110, 35),
-                "weaponRank": Coordinates(175, 355, 95, 35),
-                "skillClick": Coordinates(460.5, 903),
-                "skillLevel": Coordinates(390, 100, 70, 40),
-                "skillButton": Coordinates(200, 980, 120, 35),
-                "chainClick": Coordinates(1265, 135),
-                "chainButton": Coordinates(342, 964, 110, 32),
-                "skillPositions": [
-                    Coordinates(755, 905),
-                    Coordinates(985, 765),
-                    Coordinates(1260, 705),
-                    Coordinates(1535, 765),
-                    Coordinates(1760, 905)
+                "rightSide": Coordinates(1819, 221),
+                "resonatorName": Coordinates(200, 200, 300, 40),
+                "resonatorLevel": Coordinates(200, 254, 150, 36),
+                "weaponName": Coordinates(205, 204, 330, 38),
+                "weaponLevel": Coordinates(200, 266, 150, 34),
+                "weaponRank": Coordinates(210, 428, 120, 32),
+                # One horizontal band containing all five "Lv.X/10" labels;
+                # each label is assigned to the nearest column center.
+                "skillStrip": Coordinates(300, 750, 1320, 280),
+                "skillColumns": [
+                    Coordinates(x=466),
+                    Coordinates(x=691),
+                    Coordinates(x=963),
+                    Coordinates(x=1230),
+                    Coordinates(x=1453)
                 ],
                 "chainPositions": [
-                    Coordinates(1395, 140),
-                    Coordinates(1565, 305),
-                    Coordinates(1640, 535),
-                    Coordinates(1565, 765),
-                    Coordinates(1400, 935),
-                    Coordinates(1170, 995)
+                    Coordinates(1545, 282),
+                    Coordinates(1519, 508),
+                    Coordinates(1438, 680),
+                    Coordinates(1309, 824),
+                    Coordinates(1146, 924),
+                    Coordinates(943, 963)
                 ]
             }
         }
@@ -145,37 +145,33 @@ COORDINATES = {
                 "achievementsTab": Coordinates(735, 570),
             },
             "characters": {
+                # Rough 16:10 projection of the 3.6 16:9 layout (untested).
                 "offsets": {
                     "leftSide": Coordinates(y=119),
-                    "rightSide": Coordinates(y=93.5),
-                    "skillPosition": Coordinates(y=220)
+                    "rightSide": Coordinates(y=130)
                 },
                 "leftSide": Coordinates(68, 167.5),
-                "rightSide": Coordinates(1586.5, 177.5),
-                "resonatorName": Coordinates(220, 102, 280, 50),
-                "resonatorLevel": Coordinates(160, 180, 135, 80),
-                "weaponName": Coordinates(225, 118, 240, 34),
-                "weaponLevel": Coordinates(215, 150, 110, 35),
-                "weaponRank": Coordinates(143, 320, 93, 35),
-                "skillClick": Coordinates(403, 845),
-                "skillLevel": Coordinates(340, 95, 70, 40),
-                "skillButton": Coordinates(170, 950, 120, 35),
-                "chainClick": Coordinates(1109, 174),
-                "chainButton": Coordinates(292, 936, 110, 32),
-                "skillPositions": [
-                    Coordinates(660, 842),
-                    Coordinates(864, 722),
-                    Coordinates(1103, 667),
-                    Coordinates(1342, 722),
-                    Coordinates(1545, 842)
+                "rightSide": Coordinates(1592, 215),
+                "resonatorName": Coordinates(175, 194, 263, 39),
+                "resonatorLevel": Coordinates(175, 247, 131, 35),
+                "weaponName": Coordinates(179, 198, 289, 37),
+                "weaponLevel": Coordinates(175, 259, 131, 33),
+                "weaponRank": Coordinates(184, 416, 105, 31),
+                "skillStrip": Coordinates(263, 729, 1155, 272),
+                "skillColumns": [
+                    Coordinates(x=408),
+                    Coordinates(x=605),
+                    Coordinates(x=843),
+                    Coordinates(x=1076),
+                    Coordinates(x=1271)
                 ],
                 "chainPositions": [
-                    Coordinates(1224, 176),
-                    Coordinates(1369, 319),
-                    Coordinates(1424, 519),
-                    Coordinates(1369, 724),
-                    Coordinates(1224, 864),
-                    Coordinates(1024, 919)
+                    Coordinates(1352, 274),
+                    Coordinates(1329, 494),
+                    Coordinates(1258, 661),
+                    Coordinates(1145, 801),
+                    Coordinates(1003, 898),
+                    Coordinates(825, 936)
                 ]
             }
         }

@@ -92,10 +92,28 @@ def convertToBlackWhite(image: np.ndarray):
 
     return sharpened
 
+# normalize full-width digits and symbols the game renders (e.g. ランク５)
+FULLWIDTH_TABLE = str.maketrans('０１２３４５６７８９／％．＋－', '0123456789/%.+-')
+
+def readTextBoxes(image: np.ndarray) -> list[tuple[float, float, float, float, str]]:
+    """Run OCR and return (x0, y0, x1, y1, text) boxes in image coordinates."""
+    padded = cv2.copyMakeBorder(image, 10, 10, 10, 10, cv2.BORDER_REPLICATE)
+    try:
+        results = ocr(padded)[0] or []
+    except:
+        results = []
+
+    boxes = []
+    for bbox, text, _ in results:
+        xs = [point[0] for point in bbox]
+        ys = [point[1] for point in bbox]
+        boxes.append((min(xs) - 10, min(ys) - 10, max(xs) - 10, max(ys) - 10, text.translate(FULLWIDTH_TABLE)))
+    return boxes
+
 def imageToString(
-    image: np.ndarray, 
-    divisor: str = ' ', 
-    allowedChars: str = None, 
+    image: np.ndarray,
+    divisor: str = ' ',
+    allowedChars: str = None,
     bannedChars: str = None
 ) -> str:
     try:
@@ -103,12 +121,13 @@ def imageToString(
         # detection model (DBNet suppresses regions that touch the border)
         image = cv2.copyMakeBorder(image, 10, 10, 10, 10, cv2.BORDER_REPLICATE)
         ocrResults = ocr(image)[0]
-        
+
         banned_pattern = re.compile(f"[{re.escape(bannedChars)}]") if bannedChars else None
         allowed_pattern = re.compile(f"[^{re.escape(allowedChars)}]") if allowedChars else None
-        
+
         lines = []
         for bbox, text, _ in ocrResults:
+            text = text.translate(FULLWIDTH_TABLE)
             if banned_pattern:
                 text = banned_pattern.sub('', text)
             

@@ -125,6 +125,13 @@ def imageToString(
         # detection model (DBNet suppresses regions that touch the border)
         image = cv2.copyMakeBorder(image, 10, 10, 10, 10, cv2.BORDER_REPLICATE)
         ocrResults = ocr(image)[0]
+        if not ocrResults:
+            # small crops often defeat the detection stage entirely even
+            # though the recognizer reads them fine; treat the whole crop
+            # as a single line of text
+            recResults, _ = ocr.text_recognizer([image])
+            if recResults and recResults[0][0]:
+                ocrResults = [([[0, 0], [1, 0], [1, 1], [0, 1]], recResults[0][0], recResults[0][1])]
 
         banned_pattern = re.compile(f"[{re.escape(bannedChars)}]") if bannedChars else None
         allowed_pattern = re.compile(f"[^{re.escape(allowedChars)}]") if allowedChars else None

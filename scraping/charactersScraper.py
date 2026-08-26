@@ -257,6 +257,7 @@ def resonatorScraper(controller: WindowsInputController, screenInfo: ScreenInfo)
     # overlap; already-scanned resonators are skipped after reading their
     # name, and the scan ends once a full pass finds nothing new. This keeps
     # the scan correct even when the scroll distance is imprecise.
+    emptyPasses = 0
     for _ in range(40):
         newCount = 0
 
@@ -292,7 +293,13 @@ def resonatorScraper(controller: WindowsInputController, screenInfo: ScreenInfo)
                 time.sleep(.5)
 
         if newCount == 0:
-            break
+            # a scroll occasionally fails to move the list, making a pass all
+            # duplicates; only stop after two empty passes in a row
+            emptyPasses += 1
+            if emptyPasses >= 2:
+                break
+        else:
+            emptyPasses = 0
 
         controller.moveMouse(xRightSide, yRightSide, .3)
         controller.mouseScroll(screenInfo.scroll.characters.y, 1.2)

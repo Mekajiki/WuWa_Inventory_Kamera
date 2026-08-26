@@ -128,8 +128,9 @@ def imageToString(
         if not ocrResults:
             # small crops often defeat the detection stage entirely even
             # though the recognizer reads them fine; treat the whole crop
-            # as a single line of text
-            recResults, _ = ocr.text_recognizer([image])
+            # as a single line of text (the recognizer needs 3 channels)
+            recInput = cv2.cvtColor(image, cv2.COLOR_GRAY2RGB) if image.ndim == 2 else image
+            recResults, _ = ocr.text_recognizer([recInput])
             if recResults and recResults[0][0]:
                 ocrResults = [([[0, 0], [1, 0], [1, 1], [0, 1]], recResults[0][0], recResults[0][1])]
 

@@ -21,7 +21,9 @@ COORDINATES = {
             },
             "scroll": {
                 "page": Coordinates(y=-31.25),
-                "characters": Coordinates(y=-56),
+                # ~4 list entries per pass, leaving overlap with the previous
+                # page so the duplicate-skip logic never misses anyone
+                "characters": Coordinates(y=-30),
                 "sonata": Coordinates(y=70)
             },
             "scrapers": {
@@ -106,7 +108,7 @@ COORDINATES = {
             },
             "scroll": {
                 "page": Coordinates(y=-31.70),
-                "characters": Coordinates(y=-56),
+                "characters": Coordinates(y=-30),
                 "sonata": Coordinates(y=70)
             },
             "scrapers": {

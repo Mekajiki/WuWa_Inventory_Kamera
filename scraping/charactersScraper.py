@@ -220,11 +220,16 @@ def resonatorScraper(controller: WindowsInputController, screenInfo: ScreenInfo)
 
     controller.pressKey(cfg.get(cfg.resonatorKeybind), 2, False)
 
-    isDouble = False
     xLeftSide, yLeftSide = screenInfo.characters.leftSide.x, screenInfo.characters.leftSide.y
     xRightSide, yRightSide = screenInfo.characters.rightSide.x, screenInfo.characters.rightSide.y
 
-    while not isDouble:
+    # The list scrolls by less than one page per pass so consecutive passes
+    # overlap; already-scanned resonators are skipped after reading their
+    # name, and the scan ends once a full pass finds nothing new. This keeps
+    # the scan correct even when the scroll distance is imprecise.
+    for _ in range(40):
+        newCount = 0
+
         for resonatorIndex in range(6):
             controller.leftClick(xRightSide, yRightSide + (screenInfo.characters.offsets.rightSide.y * resonatorIndex), .7)
             resonatorID = str()
@@ -237,9 +242,10 @@ def resonatorScraper(controller: WindowsInputController, screenInfo: ScreenInfo)
 
                 match(section):
                     case 0:
-                        resonatorID, isDouble = scrapeResonator(image, screenInfo, characters, _cache)
-                        if isDouble:
+                        resonatorID, alreadyScanned = scrapeResonator(image, screenInfo, characters, _cache)
+                        if alreadyScanned:
                             break
+                        newCount += 1
                     case 1:
                         scrapeWeapon(image, screenInfo, characters, resonatorID, _cache)
                     case 2:
@@ -250,43 +256,11 @@ def resonatorScraper(controller: WindowsInputController, screenInfo: ScreenInfo)
                         scrapeChain(image, screenInfo, characters, resonatorID)
                 time.sleep(.5)
 
-            if isDouble:
-                break
-
-        if isDouble:
+        if newCount == 0:
             break
 
         controller.moveMouse(xRightSide, yRightSide, .3)
-        controller.mouseScroll(screenInfo.scroll.characters.y, .5)
-    
-    # Process last page
-    for resonatorIndex in range(5, -1, -1):
-        controller.leftClick(xRightSide, yRightSide + (screenInfo.characters.offsets.rightSide.y * resonatorIndex), .7)
-        resonatorID = str()
+        controller.mouseScroll(screenInfo.scroll.characters.y, 1.2)
 
-        for section in range(5):
-            controller.leftClick(xLeftSide, yLeftSide + (screenInfo.characters.offsets.leftSide.y * section), .8)
-
-            image = screenshot(width=screenInfo.width, height=screenInfo.height, monitor=screenInfo.monitor, originX=screenInfo.originX, originY=screenInfo.originY)
-
-            match(section):
-                case 0:
-                    resonatorID, isDouble = scrapeResonator(image, screenInfo, characters, _cache)
-                    del _cache
-                    return dict(characters)
-                case 1:
-                    scrapeWeapon(image, screenInfo, characters, resonatorID, _cache)
-                case 2:
-                    pass  # Skip echoes for now
-                case 3:
-                    scrapeSkills(image, screenInfo, characters, resonatorID, _cache)
-                case 4:
-                    scrapeChain(image, screenInfo, characters, resonatorID)
-
-            time.sleep(.5)
-        
-        if isDouble:
-            break
-    
     del _cache
     return dict(characters)

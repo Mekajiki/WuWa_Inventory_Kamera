@@ -82,6 +82,11 @@ def scrapeResonator(image: np.ndarray, screenInfo: ScreenInfo, characters: dict,
             resonatorName = result
         else:
             logger.debug(f'Unmatched resonator name: {resonatorName!r}')
+            try:
+                Path('logs/fail').mkdir(parents=True, exist_ok=True)
+                cv2.imwrite(f'logs/fail/name_unmatched_{abs(resonatorNameHash)}.png', resonatorNameImage)
+            except Exception:
+                pass
         
         roverName = cfg.get(cfg.roverName).replace(' ', '').lower()
         # OCR sometimes drops a trailing kana, so match the Rover name fuzzily
@@ -99,13 +104,15 @@ def scrapeResonator(image: np.ndarray, screenInfo: ScreenInfo, characters: dict,
     if levelHash in _cache:
         level = _cache[levelHash]
     else:
-        level = splitLevel(re.sub(r'[^0-9/]', '', recognizeLine(levelImage)))
+        # the level line mixes font sizes, which the recognizer alone garbles;
+        # the full detection pipeline is more reliable here
+        level = splitLevel(imageToString(levelImage, '', allowedChars=string.digits + '/'))
         _cache[levelHash] = level
 
     try: ascensionLvl = ASCENSION_LEVELS.index(int(level[1]))
     except: ascensionLvl = 0
 
-    try: characterLvl = int(level[0])
+    try: characterLvl = min(90, max(1, int(level[0])))
     except: characterLvl = 1
 
     characters[resonatorID]['level'] = characterLvl
@@ -159,7 +166,7 @@ def scrapeWeapon(image: np.ndarray, screenInfo: ScreenInfo, characters: dict, re
             rankValue = int(rank[0])
 
         characters[resonatorID]['weapon']['id'] = weaponID
-        characters[resonatorID]['weapon']['level'] = int(level[0])
+        characters[resonatorID]['weapon']['level'] = min(90, max(1, int(level[0])))
         characters[resonatorID]['weapon']['ascension'] = ASCENSION_LEVELS.index(int(level[1]))
         characters[resonatorID]['weapon']['rank'] = min(5, max(0, rankValue))
     except:

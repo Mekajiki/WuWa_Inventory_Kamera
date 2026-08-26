@@ -103,10 +103,10 @@ def needToStop(tPID, completeFLAG):
 		# Check if the game is no longer in the foreground or if the key is pressed.
 		# isActive can flicker for a frame, so require sustained focus loss.
 		notForeground = notForeground + 1 if not gameManager.isForeground() else 0
-		if notForeground >= 5 or keyPress.isPressed():
+		if notForeground >= 10 or keyPress.isPressed():
 			try:
 				os.kill(tPID, signal.SIGTERM)
-				logger.debug(f"Terminated scraper process (keyPressed={keyPress.isPressed()}, notForeground={notForeground}).")
+				logger.debug(f"Terminated scraper process (keyPressed={keyPress.isPressed()}, notForeground={notForeground}, window={gameManager.window}).")
 			except Exception as e:
 				logger.error(f"Error terminating process: {e}", exc_info=True)
 			sys.exit(0)

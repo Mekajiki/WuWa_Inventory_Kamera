@@ -97,6 +97,16 @@ class WindowManager:
 
 	def isForeground(self) -> bool:
 		"""Check if the window is still in foreground."""
+		if not self.window:
+			self.window = self._findWindow()
 		if self.window:
-			return self.window.isActive
+			try:
+				return self.window.isActive
+			except Exception:
+				# stale handle (the game recreated its window); re-find it
+				self.window = self._findWindow()
+				try:
+					return bool(self.window and self.window.isActive)
+				except Exception:
+					return False
 		return False

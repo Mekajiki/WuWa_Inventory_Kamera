@@ -269,8 +269,15 @@ class DataUpdater(QObject):
 		nanoka.cc (formerly hakush.in) dataset. The WutheringData repo the
 		other tables come from stopped updating at game version 3.1, so it
 		is missing every resonator and weapon released since."""
+		def openURL(url: str, timeout: int):
+			# Cloudflare rejects the default Python-urllib user agent
+			return urllib.request.urlopen(
+				urllib.request.Request(url, headers={'User-Agent': 'Mozilla/5.0 (WuWa Inventory Kamera)'}),
+				timeout=timeout
+			)
+
 		try:
-			with urllib.request.urlopen(f'{self.NANOKA}/manifest.json', timeout=15) as response:
+			with openURL(f'{self.NANOKA}/manifest.json', 15) as response:
 				manifest = json.loads(response.read().decode())
 			version = str(manifest.get('ww', {}).get('latest', '')).split('+')[0]
 			if not version:
@@ -285,7 +292,7 @@ class DataUpdater(QObject):
 			lang = self._nanokaLang()
 
 			def fetchTable(table: str) -> dict:
-				with urllib.request.urlopen(f'{self.NANOKA}/ww/{version}/{table}.json', timeout=30) as response:
+				with openURL(f'{self.NANOKA}/ww/{version}/{table}.json', 30) as response:
 					return json.loads(response.read().decode())
 
 			characters = {}

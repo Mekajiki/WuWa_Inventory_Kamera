@@ -4,6 +4,7 @@ import time
 import string
 import logging
 import numpy as np
+from pathlib import Path
 from difflib import SequenceMatcher, get_close_matches as getMatches
 from collections import defaultdict
 
@@ -68,6 +69,13 @@ def scrapeResonator(image: np.ndarray, screenInfo: ScreenInfo, characters: dict,
         return None, True
     else:
         resonatorName = imageToString(resonatorNameImage, '', bannedChars=' ').lower()
+        if not resonatorName:
+            # keep the crop so unreadable names can be diagnosed
+            try:
+                Path('logs/fail').mkdir(parents=True, exist_ok=True)
+                cv2.imwrite(f'logs/fail/name_{abs(resonatorNameHash)}.png', resonatorNameImage)
+            except Exception:
+                pass
     
         result = matchName(resonatorName, charactersID)
         if result:
@@ -238,7 +246,9 @@ def resonatorScraper(controller: WindowsInputController, screenInfo: ScreenInfo)
     )
     _cache = dict()
 
-    controller.pressKey(cfg.get(cfg.resonatorKeybind), 2, False)
+    # give the resonator screen time to finish its opening animation, or the
+    # first character's sections are captured before they render
+    controller.pressKey(cfg.get(cfg.resonatorKeybind), 3, False)
 
     xLeftSide, yLeftSide = screenInfo.characters.leftSide.x, screenInfo.characters.leftSide.y
     xRightSide, yRightSide = screenInfo.characters.rightSide.x, screenInfo.characters.rightSide.y

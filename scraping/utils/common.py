@@ -114,6 +114,21 @@ def readTextBoxes(image: np.ndarray) -> list[tuple[float, float, float, float, s
         boxes.append((min(xs) - 10, min(ys) - 10, max(xs) - 10, max(ys) - 10, text.translate(FULLWIDTH_TABLE)))
     return boxes
 
+def recognizeLine(image: np.ndarray) -> str:
+    """OCR a crop known to contain a single line of text, skipping the
+    detection stage entirely — detection tends to fragment or miss short
+    single-line crops such as names."""
+    try:
+        image = cv2.copyMakeBorder(image, 10, 10, 10, 10, cv2.BORDER_REPLICATE)
+        if image.ndim == 2:
+            image = cv2.cvtColor(image, cv2.COLOR_GRAY2RGB)
+        results, _ = ocr.text_recognizer([image])
+        if results and results[0][0]:
+            return results[0][0].translate(FULLWIDTH_TABLE).strip()
+    except:
+        pass
+    return ''
+
 def imageToString(
     image: np.ndarray,
     divisor: str = ' ',

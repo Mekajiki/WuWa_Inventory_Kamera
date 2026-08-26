@@ -11,7 +11,7 @@ from collections import defaultdict
 from scraping.utils import charactersID, weaponsID, definedText
 from scraping.utils import (
     screenshot, convertToBlackWhite, imageToString,
-    readTextBoxes, WindowsInputController
+    readTextBoxes, recognizeLine, WindowsInputController
 )
 from scraping.utils.common import loadFile
 
@@ -68,7 +68,7 @@ def scrapeResonator(image: np.ndarray, screenInfo: ScreenInfo, characters: dict,
     if resonatorNameHash in _cache:
         return None, True
     else:
-        resonatorName = imageToString(resonatorNameImage, '', bannedChars=' ').lower()
+        resonatorName = recognizeLine(resonatorNameImage).replace(' ', '').lower()
         if not resonatorName:
             # keep the crop so unreadable names can be diagnosed
             try:
@@ -99,7 +99,7 @@ def scrapeResonator(image: np.ndarray, screenInfo: ScreenInfo, characters: dict,
     if levelHash in _cache:
         level = _cache[levelHash]
     else:
-        level = splitLevel(imageToString(levelImage, '', allowedChars=string.digits + '/'))
+        level = splitLevel(re.sub(r'[^0-9/]', '', recognizeLine(levelImage)))
         _cache[levelHash] = level
 
     try: ascensionLvl = ASCENSION_LEVELS.index(int(level[1]))
@@ -121,7 +121,7 @@ def scrapeWeapon(image: np.ndarray, screenInfo: ScreenInfo, characters: dict, re
     if weaponNameHash in _cache:
         weaponID = _cache[weaponNameHash]
     else:
-        weaponName = imageToString(weaponNameImage, '', bannedChars=' ').lower()
+        weaponName = recognizeLine(weaponNameImage).replace(' ', '').lower()
     
         result = matchName(weaponName, weaponsID, cutoffs=(0.9, 0.75, 0.6))
         if result:
@@ -139,7 +139,7 @@ def scrapeWeapon(image: np.ndarray, screenInfo: ScreenInfo, characters: dict, re
     if levelHash in _cache:
         level = _cache[levelHash]
     else:
-        level = splitLevel(imageToString(levelImage, '', allowedChars=string.digits + '/'))
+        level = splitLevel(re.sub(r'[^0-9/]', '', recognizeLine(levelImage)))
         _cache[levelHash] = level
 
     rankImage = image[screenInfo.characters.weaponRank.y:screenInfo.characters.weaponRank.y + screenInfo.characters.weaponRank.h, screenInfo.characters.weaponRank.x:screenInfo.characters.weaponRank.x + screenInfo.characters.weaponRank.w]
@@ -149,7 +149,7 @@ def scrapeWeapon(image: np.ndarray, screenInfo: ScreenInfo, characters: dict, re
     if rankHash in _cache:
         rank = _cache[rankHash]
     else:
-        rank = imageToString(rankImage, '', allowedChars=string.digits)
+        rank = re.sub(r'[^0-9]', '', recognizeLine(rankImage))
         _cache[rankHash] = rank
 
     try:

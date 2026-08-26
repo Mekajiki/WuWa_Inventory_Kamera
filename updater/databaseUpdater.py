@@ -26,7 +26,8 @@ class DataUpdater(QObject):
 	updateFinished = Signal()
 
 	API = 'https://api.github.com/repos/{owner}/{repo}/contents/{path}'
-	
+	NANOKA = 'https://static.nanoka.cc'
+
 	def __init__(self):
 		super().__init__()
 		self.author = 'Dimbreath'
@@ -257,6 +258,67 @@ class DataUpdater(QObject):
 		except Exception as e:
 			logger.error(f'Failed to update definedText. Error: {e}', exc_info=True)
 
+	def _nanokaLang(self) -> str:
+		lang = self.lang.split('-')[0]
+		if lang in ('en', 'ja', 'ko'):
+			return lang
+		return 'zh' if self.lang.startswith('zh') else 'en'
+
+	def updateFromNanoka(self, force: bool = False):
+		"""Rebuild characters.json and weapons.json from the maintained
+		nanoka.cc (formerly hakush.in) dataset. The WutheringData repo the
+		other tables come from stopped updating at game version 3.1, so it
+		is missing every resonator and weapon released since."""
+		try:
+			with urllib.request.urlopen(f'{self.NANOKA}/manifest.json', timeout=15) as response:
+				manifest = json.loads(response.read().decode())
+			version = str(manifest.get('ww', {}).get('latest', '')).split('+')[0]
+			if not version:
+				return
+
+			cached = self.loadJson('nanokaVersion.json').get('version')
+			if not force and cached == version \
+					and (Path('data') / 'characters.json').is_file() \
+					and (Path('data') / 'weapons.json').is_file():
+				return
+
+			lang = self._nanokaLang()
+
+			def fetchTable(table: str) -> dict:
+				with urllib.request.urlopen(f'{self.NANOKA}/ww/{version}/{table}.json', timeout=30) as response:
+					return json.loads(response.read().decode())
+
+			characters = {}
+			for charID, info in fetchTable('character').items():
+				name = str(info.get(lang) or info.get('en') or '')
+				if name:
+					characters[name.lower().replace(' ', '')] = int(charID)
+			if characters:
+				self.saveJson(characters, 'characters.json')
+				charactersID.update(characters)
+
+			weapons = {}
+			for weaponID, info in fetchTable('weapon').items():
+				name = str(info.get(lang) or info.get('en') or '')
+				if not name:
+					continue
+				icon = str(info.get('icon', ''))
+				image = icon.split('/Image/')[1].rsplit('.', 1)[0] + '.png' if '/Image/' in icon else ''
+				weapons[name.lower().replace(' ', '')] = {
+					'id': int(weaponID),
+					'name': name,
+					'rarity': info.get('rank', 1),
+					'image': image
+				}
+			if weapons:
+				self.saveJson(weapons, 'weapons.json')
+				weaponsID.update(weapons)
+
+			self.saveJson({'version': version}, 'nanokaVersion.json')
+			logger.info(f'Updated characters/weapons from nanoka.cc (ww {version}, {lang})')
+		except Exception as e:
+			logger.error(f'Failed to update from nanoka.cc: {e}', exc_info=True)
+
 	def run(self):
 		self.updateFiles()
 		derivedFiles = (
@@ -272,4 +334,5 @@ class DataUpdater(QObject):
 			self.updateAchievements()
 			self.updateCharacters()
 			self.updateEcho()
+		self.updateFromNanoka(force=self.updated or derivedMissing)
 		self.updateFinished.emit()

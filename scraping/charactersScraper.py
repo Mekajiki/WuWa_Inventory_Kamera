@@ -12,6 +12,10 @@ from scraping.utils import (
     screenshot, convertToBlackWhite, imageToString,
     readTextBoxes, WindowsInputController
 )
+from scraping.utils.common import loadFile
+
+# user-editable corrections for stubborn OCR misreads (e.g. 秧秧 read as 秋秋)
+nameAliases: dict = loadFile('./nameAliases.json')
 from game.screenInfo import ScreenInfo
 from properties.config import cfg
 
@@ -26,6 +30,24 @@ SKILL_LEGENDS = {
     4: 'intro'
 }
 ASCENSION_LEVELS = [20, 40, 50, 60, 70, 80, 90]
+
+def matchName(name: str, candidates, cutoffs=(0.9, 0.7)) -> str | None:
+    """Resolve an OCR'd name against known names: alias table, exact match,
+    fuzzy match, then unique-substring containment (OCR often drops chars)."""
+    name = name.replace('-', 'ー')
+    if name in nameAliases:
+        return nameAliases[name]
+    if name in candidates:
+        return name
+    for cutoff in cutoffs:
+        result = getMatches(name, candidates, 1, cutoff)
+        if result:
+            return result[0]
+    if len(name) >= 2:
+        containing = [candidate for candidate in candidates if name in candidate]
+        if len(containing) == 1:
+            return containing[0]
+    return None
 
 def splitLevel(text: str) -> list[str]:
     """Split an OCR'd "level/cap" string; the slash is often lost, in which
@@ -47,9 +69,9 @@ def scrapeResonator(image: np.ndarray, screenInfo: ScreenInfo, characters: dict,
     else:
         resonatorName = imageToString(resonatorNameImage, '', bannedChars=' ').lower()
     
-        result = getMatches(resonatorName, charactersID, 1, 0.9) or getMatches(resonatorName, charactersID, 1, 0.7)
+        result = matchName(resonatorName, charactersID)
         if result:
-            resonatorName = result[0]
+            resonatorName = result
         else:
             logger.debug(f'Unmatched resonator name: {resonatorName!r}')
         
@@ -93,11 +115,9 @@ def scrapeWeapon(image: np.ndarray, screenInfo: ScreenInfo, characters: dict, re
     else:
         weaponName = imageToString(weaponNameImage, '', bannedChars=' ').lower()
     
-        result = (getMatches(weaponName, weaponsID, 1, 0.9)
-                  or getMatches(weaponName, weaponsID, 1, 0.75)
-                  or getMatches(weaponName, weaponsID, 1, 0.6))
+        result = matchName(weaponName, weaponsID, cutoffs=(0.9, 0.75, 0.6))
         if result:
-            weaponName = result[0]
+            weaponName = result
         else:
             logger.debug(f'Unmatched weapon name: {weaponName!r}')
 
@@ -243,6 +263,11 @@ def resonatorScraper(controller: WindowsInputController, screenInfo: ScreenInfo)
                 match(section):
                     case 0:
                         resonatorID, alreadyScanned = scrapeResonator(image, screenInfo, characters, _cache)
+                        if resonatorID == '' and not alreadyScanned:
+                            # likely captured mid-transition; retry once
+                            time.sleep(.6)
+                            image = screenshot(width=screenInfo.width, height=screenInfo.height, monitor=screenInfo.monitor, originX=screenInfo.originX, originY=screenInfo.originY)
+                            resonatorID, alreadyScanned = scrapeResonator(image, screenInfo, characters, _cache)
                         if alreadyScanned:
                             break
                         newCount += 1

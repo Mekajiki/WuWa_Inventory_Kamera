@@ -79,7 +79,9 @@ def managerStart(scraperEnabled: list):
 
 		savingScraped(START_DATE=INVENTORY['date'])
 
-		if len(FAILED) > 0:
+		if scrapersProcess.exitcode not in (0, None):
+			result = ('failed', 'Interrupted', 'Scan was interrupted before finishing (game lost focus or stop key pressed). Results were not saved.')
+		elif len(FAILED) > 0:
 			result = ('failed', 'Failed to recognize', f'Failed to recognize {len(FAILED)} items.')
 		else:
 			result = ('success', 'Complete', f'Scan completed without errors.')
@@ -89,15 +91,22 @@ def managerStart(scraperEnabled: list):
 
 
 def needToStop(tPID, completeFLAG):
+	logging.basicConfig(
+		filename='logs/scraper.debug.log', level=logging.DEBUG,
+		format='%(asctime)s|%(levelname)s|%(name)s|%(message)s'
+	)
 	keyPress = KeyPressChecker()
 	gameManager = WindowManager()
+	notForeground = 0
 
 	while not completeFLAG.is_set():
-		# Check if the game is no longer in the foreground or if the key is pressed
-		if not gameManager.isForeground() or keyPress.isPressed():
+		# Check if the game is no longer in the foreground or if the key is pressed.
+		# isActive can flicker for a frame, so require sustained focus loss.
+		notForeground = notForeground + 1 if not gameManager.isForeground() else 0
+		if notForeground >= 5 or keyPress.isPressed():
 			try:
 				os.kill(tPID, signal.SIGTERM)
-				logger.debug("Terminated scraper process due to key press or game not in foreground.")
+				logger.debug(f"Terminated scraper process (keyPressed={keyPress.isPressed()}, notForeground={notForeground}).")
 			except Exception as e:
 				logger.error(f"Error terminating process: {e}", exc_info=True)
 			sys.exit(0)

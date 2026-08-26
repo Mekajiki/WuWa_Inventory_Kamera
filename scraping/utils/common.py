@@ -45,6 +45,10 @@ def savingScraped(scannedData: dict = {'inventory_wuwainventorykamera.json': (IN
 def screenshot(left: int = 0, top: int = 0, width: int = 0, height: int = 0, monitor: int = 1, bw: bool = False, originX: int = None, originY: int = None):
 
     with mss.mss() as sct:
+        # Windows renumbers displays (\\.\DISPLAYn) after resolution changes,
+        # so the parsed index can exceed what mss enumerates
+        if monitor >= len(sct.monitors):
+            monitor = min(1, len(sct.monitors) - 1)
         mon = sct.monitors[monitor]
         if all(coord == 0 for coord in [top, left, width, height]):
             left, top, width, height = tuple(coord for coord in mon.values())

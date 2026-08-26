@@ -20,6 +20,8 @@ class WindowsInputController:
             originY (int, optional): Window client-area origin Y.
         """
         self.sct = mss()
+        if monitor >= len(self.sct.monitors):
+            monitor = min(1, len(self.sct.monitors) - 1)
         self.monitor = self.sct.monitors[monitor]
         self.originX = originX
         self.originY = originY

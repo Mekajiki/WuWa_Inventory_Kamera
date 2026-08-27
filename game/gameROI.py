@@ -18,7 +18,8 @@ class Coordinates:
 ULTRAWIDE_ANCHORS = {
     'shell': 'right',
     'characters.rightSide': 'right',
-    'characters.chainPositions': 'right',
+    # the chain arc wraps around the character model, which stays centered
+    'characters.chainPositions': 'center',
     'characters.skillStrip': 'center',
     'characters.skillColumns': 'center',
     'items.info': 'right',

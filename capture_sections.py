@@ -23,15 +23,6 @@ def main():
         cv2.imwrite(f'section_{section}.png', cv2.cvtColor(img, cv2.COLOR_RGB2BGR))
         print(f'section {section} saved')
 
-    # スキル詳細画面も1枚(セクション3の状態から skillClick)
-    controller.leftClick(ch.leftSide.x, ch.leftSide.y + ch.offsets.leftSide.y * 3, 1.5)
-    controller.leftClick(ch.skillClick.x, ch.skillClick.y, 1.5)
-    img = screenshot(width=si.width, height=si.height, monitor=si.monitor,
-                     originX=si.originX, originY=si.originY)
-    cv2.imwrite('section_skill_detail.png', cv2.cvtColor(img, cv2.COLOR_RGB2BGR))
-    print('skill detail saved')
-    controller.pressKey('esc', .5)
-
     print(f'done ({si.width}x{si.height} origin=({si.originX},{si.originY}))')
 
 if __name__ == '__main__':

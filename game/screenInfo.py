@@ -1,5 +1,5 @@
 import math
-from game.gameROI import Coordinates, COORDINATES
+from game.gameROI import Coordinates, COORDINATES, ULTRAWIDE_ANCHORS
 
 PRECOMPUTED_RATIOS = [(w / h, (w, h)) for w, h in list(COORDINATES)]
 
@@ -28,10 +28,15 @@ class ScreenInfo:
         self.originX = originX
         self.originY = originY
 
-        try:
-            self.data = COORDINATES[self.getRatio()][(self.width, self.height)]
-        except KeyError:
-            self.data = self._scaleScreen()
+        if self.height and self.width / self.height > (16 / 9) * 1.03:
+            # wider than 16:9 (ultrawide): the game scales its UI by height
+            # and anchors panels to the screen edges
+            self.data = self._anchorScreen()
+        else:
+            try:
+                self.data = COORDINATES[self.getRatio()][(self.width, self.height)]
+            except KeyError:
+                self.data = self._scaleScreen()
 
         self.data = self._convertToObject(self.data)
 
@@ -42,6 +47,47 @@ class ScreenInfo:
         if isinstance(obj, dict):
             return ScreenInfoObject(obj)
         return obj
+
+    def _anchorScreen(self):
+        """Project the 16:9 reference table onto an ultrawide screen: scale
+        everything by height and re-anchor horizontal positions according to
+        ULTRAWIDE_ANCHORS (left by default, or right/center)."""
+        reference = COORDINATES[(16, 9)][(1920, 1080)]
+        scale = self.height / 1080
+
+        def anchorFor(path: str) -> str:
+            while path:
+                if path in ULTRAWIDE_ANCHORS:
+                    return ULTRAWIDE_ANCHORS[path]
+                path = path.rpartition('.')[0]
+            return 'left'
+
+        def projectX(x, anchor):
+            if not x:
+                return 0
+            if anchor == 'right':
+                return int(self.width - (1920 - x) * scale)
+            if anchor == 'center':
+                return int(self.width / 2 + (x - 960) * scale)
+            return int(x * scale)
+
+        def project(data, path):
+            if isinstance(data, Coordinates):
+                anchor = anchorFor(path)
+                return Coordinates(
+                    x=projectX(data.x, anchor),
+                    y=int(data.y * scale) if data.y else 0,
+                    w=int(data.w * scale) if data.w else 0,
+                    h=int(data.h * scale) if data.h else 0
+                )
+            elif isinstance(data, dict):
+                return {key: project(value, f'{path}.{key}' if path else key) for key, value in data.items()}
+            elif isinstance(data, list):
+                return [project(item, path) for item in data]
+            else:
+                return data
+
+        return project(reference, '')
 
     def _scaleScreen(self):
         """

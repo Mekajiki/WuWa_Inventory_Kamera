@@ -11,6 +11,31 @@ class Coordinates:
     def __reduce__(self):
         return (self.__class__, (self.x, self.y, self.w, self.h))
 
+# How UI elements are anchored horizontally on screens wider than 16:9
+# (e.g. 21:9 / 32:13.5 ultrawide). The game scales its UI by height and pins
+# panels to the screen edges. Longest-prefix match against the table path;
+# anything not listed is left-anchored (x scales with height, like y).
+ULTRAWIDE_ANCHORS = {
+    'shell': 'right',
+    'characters.rightSide': 'right',
+    'characters.chainPositions': 'right',
+    'characters.skillStrip': 'center',
+    'characters.skillColumns': 'center',
+    'items.info': 'right',
+    'items.description': 'right',
+    'weapons.name': 'right',
+    'weapons.value': 'right',
+    'weapons.level': 'right',
+    'weapons.rank': 'right',
+    'echoes.echoCard': 'right',
+    'echoes.sonata': 'right',
+    'echoes.mouseMovement': 'right',
+    'echoes.fullStatsName': 'right',
+    'echoes.fullStatsValue': 'right',
+    'achievements.status': 'right',
+    'achievements.achievementsButton': 'right',
+}
+
 COORDINATES = {
     (16, 9): {
         (1920, 1080): {

@@ -209,7 +209,7 @@ def parseEquippedEcho(image: np.ndarray, screenInfo: ScreenInfo):
     """Parse the right-hand panel of the echo swap screen (opened by clicking
     an equipped slot): name, +level, cost, two main stats, up to five
     substats, and the sonata name — all visible without scrolling."""
-    from scraping.echoesScraper import matchEchoName, matchStatName
+    from scraping.echoesScraper import matchEchoName, matchStatName, normalizeValue
     from scraping.utils import echoesID, sonataName
 
     panel = screenInfo.characters.echoPanel
@@ -260,7 +260,7 @@ def parseEquippedEcho(image: np.ndarray, screenInfo: ScreenInfo):
         value = next((t for y, t in values if abs(y - labelY) < panel.h * 0.03), None)
         if value is None:
             continue
-        value = value.replace(' ', '')
+        value = normalizeValue(value)
         bucket = 'main' if count < 2 else 'sub'
         try:
             if value.endswith('%'):

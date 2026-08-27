@@ -14,10 +14,17 @@ from scraping.utils import (
 )
 from game.screenInfo import ScreenInfo
 from properties.config import cfg
+from scraping.utils.common import loadFile
 
 logger = logging.getLogger('EchoScraper')
 
+nameAliases: dict = loadFile('./nameAliases.json')
+
 GRID_ROWS = 4
+
+def normalizeValue(value: str) -> str:
+    """Fix OCR decimal commas (44,0% -> 44.0%) without touching thousands."""
+    return re.sub(r',(?=\d%?$)', '.', value.replace(' ', ''))
 
 def gridColumns(screenInfo: ScreenInfo) -> int:
     """Number of grid columns that fit between the grid origin and the
@@ -38,11 +45,16 @@ def cropROI(image: np.ndarray, roi):
 
 def matchEchoName(name: str) -> str | None:
     name = name.replace('-', 'ー').lower().replace(' ', '')
+    if name in nameAliases:
+        return nameAliases[name]
     if name in echoesID:
         return name
     result = getMatches(name, echoesID, 1, 0.85) or getMatches(name, echoesID, 1, 0.7)
     if result:
         return result[0]
+    aliasHit = getMatches(name, nameAliases, 1, 0.8)
+    if aliasHit:
+        return nameAliases[aliasHit[0]]
     if len(name) >= 3:
         containing = [candidate for candidate in echoesID if name in candidate]
         if len(containing) == 1:
@@ -101,7 +113,7 @@ def readStats(image: np.ndarray, screenInfo: ScreenInfo) -> tuple[int, dict]:
         value = next((t for y, t in values if abs(y - labelY) < area.h * 0.05), None)
         if value is None:
             continue
-        value = value.replace(' ', '')
+        value = normalizeValue(value)
         bucket = 'main' if count < 2 else 'sub'
         try:
             if value.endswith('%'):

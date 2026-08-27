@@ -140,7 +140,7 @@ COORDINATES = {
                     Coordinates(1487, 775),
                     Coordinates(1415, 905)
                 ],
-                "echoPanel": Coordinates(1500, 140, 360, 660),
+                "echoPanel": Coordinates(1500, 140, 360, 820),
                 "echoCost": Coordinates(1500, 185, 150, 34)
             }
         }
@@ -234,7 +234,7 @@ COORDINATES = {
                     Coordinates(1301, 753),
                     Coordinates(1238, 880)
                 ],
-                "echoPanel": Coordinates(1313, 136, 315, 641),
+                "echoPanel": Coordinates(1313, 136, 315, 797),
                 "echoCost": Coordinates(1313, 180, 131, 33)
             }
         }

@@ -28,3 +28,12 @@ __pycache__/
 *.log
 *.env
 .DS_Store
+
+# Screenshots and scratch output from the measurement/debug tools
+*.png
+scan_cli_out.txt
+scroll_result.txt
+sections_result.txt
+popups_result.txt
+roi_result.txt
+smoke_result.txt

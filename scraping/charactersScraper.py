@@ -205,6 +205,103 @@ def scrapeSkills(image: np.ndarray, screenInfo: ScreenInfo, characters: dict, re
             logger.debug(f'Failed scraping skill level for column {index}')
         characters[resonatorID]['skills'][SKILL_LEGENDS[index]] = levels.get(index, 1)
 
+def parseEquippedEcho(image: np.ndarray, screenInfo: ScreenInfo):
+    """Parse the right-hand panel of the echo swap screen (opened by clicking
+    an equipped slot): name, +level, cost, two main stats, up to five
+    substats, and the sonata name — all visible without scrolling."""
+    from scraping.echoesScraper import matchEchoName, matchStatName
+    from scraping.utils import echoesID, sonataName
+
+    panel = screenInfo.characters.echoPanel
+    crop = image[int(panel.y):int(panel.y + panel.h), int(panel.x):int(panel.x + panel.w)]
+    boxes = sorted(readTextBoxes(crop), key=lambda b: b[1])
+    if not boxes:
+        return None
+
+    name, level, sonata = None, 0, str()
+    statRows = []
+    harmonyY = None
+    for x0, y0, x1, y1, text in boxes:
+        text = text.strip()
+        if found := re.fullmatch(r'\+(\d+)', text):
+            level = min(25, int(found.group(1)))
+            continue
+        if name is None and x0 < panel.w * 0.5:
+            name = text
+            continue
+        if '音骸スキル' in text:
+            harmonyY = -1  # stats section is over
+            continue
+        if 'ハーモニー効果' in text:
+            harmonyY = y0
+            continue
+        if harmonyY is not None and harmonyY >= 0 and y0 > harmonyY and not sonata:
+            candidate = text.lower().replace(' ', '')
+            hit = getMatches(candidate, sonataName, 1, 0.75)
+            if hit:
+                sonata = hit[0]
+            continue
+        if harmonyY is None and name is not None and 'COST' not in text.upper():
+            statRows.append((x0, (y0 + y1) / 2, text))
+
+    matched = matchEchoName(name or '')
+    if not matched:
+        logger.debug(f'Unmatched equipped echo name: {name!r}')
+        return None
+
+    labels = [(y, t) for x, y, t in statRows if x < panel.w * 0.6]
+    values = [(y, t) for x, y, t in statRows if x >= panel.w * 0.6]
+    stats = {'main': {}, 'sub': {}}
+    count = 0
+    for labelY, labelText in labels:
+        statName = matchStatName(labelText.lstrip('+十ト '))
+        if not statName:
+            continue
+        value = next((t for y, t in values if abs(y - labelY) < panel.h * 0.03), None)
+        if value is None:
+            continue
+        value = value.replace(' ', '')
+        bucket = 'main' if count < 2 else 'sub'
+        try:
+            if value.endswith('%'):
+                stats[bucket][f'{statName}%'] = float(value[:-1])
+            else:
+                stats[bucket][statName] = int(float(value))
+        except ValueError:
+            stats[bucket][statName] = value
+        count += 1
+
+    cost = re.sub(r'[^0-9]', '', recognizeLine(image[int(screenInfo.characters.echoCost.y):int(screenInfo.characters.echoCost.y + screenInfo.characters.echoCost.h), int(screenInfo.characters.echoCost.x):int(screenInfo.characters.echoCost.x + screenInfo.characters.echoCost.w)]))
+
+    return {
+        'id': echoesID[matched],
+        'name': matched,
+        'level': level,
+        'cost': int(cost) if cost else 0,
+        'sonata': sonata,
+        'stats': stats
+    }
+
+def scrapeEquippedEchoes(controller: WindowsInputController, screenInfo: ScreenInfo, characters: dict, resonatorID: str):
+    """Click each equipped echo slot and read the swap screen's detail panel.
+    Skipped for low-level characters, which have nothing meaningful equipped."""
+    if characters[resonatorID]['level'] < 40:
+        return
+
+    for slot, position in enumerate(screenInfo.characters.equipSlots):
+        controller.leftClick(position.x, position.y, 1.3)
+        image = screenshot(width=screenInfo.width, height=screenInfo.height, monitor=screenInfo.monitor, originX=screenInfo.originX, originY=screenInfo.originY)
+
+        echo = parseEquippedEcho(image, screenInfo)
+        if echo:
+            characters[resonatorID]['echoes'][str(slot)] = echo
+
+        # only back out if the swap screen actually opened (trial characters
+        # show a toast instead); a blind esc would exit the resonator screen
+        marker = recognizeLine(image[int(50 * screenInfo.height / 1080):int(84 * screenInfo.height / 1080), int(screenInfo.width - 470 * screenInfo.height / 1080):int(screenInfo.width - 380 * screenInfo.height / 1080)])
+        if echo or '簡' in marker or '略' in marker:
+            controller.pressKey('esc', 1.0)
+
 def scrapeChain(image: np.ndarray, screenInfo: ScreenInfo, characters: dict, resonatorID: str):
     # Activated chain nodes glow cyan on the 3.6 chain screen; classify each
     # node by the amount of saturated cyan around its center.
@@ -297,7 +394,7 @@ def resonatorScraper(controller: WindowsInputController, screenInfo: ScreenInfo)
                     case 1:
                         scrapeWeapon(image, screenInfo, characters, resonatorID, _cache)
                     case 2:
-                        pass  # Skip echoes for now
+                        scrapeEquippedEchoes(controller, screenInfo, characters, resonatorID)
                     case 3:
                         scrapeSkills(image, screenInfo, characters, resonatorID, _cache)
                     case 4:

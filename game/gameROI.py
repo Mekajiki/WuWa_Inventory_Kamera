@@ -18,8 +18,11 @@ class Coordinates:
 ULTRAWIDE_ANCHORS = {
     'shell': 'right',
     'characters.rightSide': 'right',
-    # the chain arc wraps around the character model, which stays centered
+    # the chain arc and echo slots wrap around the centered character model
     'characters.chainPositions': 'center',
+    'characters.equipSlots': 'center',
+    'characters.echoPanel': 'right',
+    'characters.echoCost': 'right',
     'characters.skillStrip': 'center',
     'characters.skillColumns': 'center',
     'items.info': 'right',
@@ -28,11 +31,13 @@ ULTRAWIDE_ANCHORS = {
     'weapons.value': 'right',
     'weapons.level': 'right',
     'weapons.rank': 'right',
-    'echoes.echoCard': 'right',
-    'echoes.sonata': 'right',
-    'echoes.mouseMovement': 'right',
-    'echoes.fullStatsName': 'right',
-    'echoes.fullStatsValue': 'right',
+    'echoes.panelLeft': 'right',
+    'echoes.name': 'right',
+    'echoes.level': 'right',
+    'echoes.cost': 'right',
+    'echoes.rarityLine': 'right',
+    'echoes.statsArea': 'right',
+    'echoes.panelScroll': 'right',
     'achievements.status': 'right',
     'achievements.achievementsButton': 'right',
 }
@@ -72,13 +77,19 @@ COORDINATES = {
                 "rank": Coordinates(1300, 530, 115, 50)
             },
             "echoes": {
-                "page": Coordinates(200, 50, 130, 40),
-                "start": Coordinates(205, 122, 151, 181),
-                "echoCard": Coordinates(1296, 114, 558, 170),
-                "sonata": Coordinates(1298, 397, 554, 467),
-                "mouseMovement": Coordinates(1576.5, 665.5),
-                "fullStatsName": Coordinates(1380, 430, 360, 380),
-                "fullStatsValue": Coordinates(1740, 430, 100, 380)
+                # 3.6 bag layout: cell "+N" label origin and pitch (x0, y0,
+                # pitchX, pitchY); column count is derived from panelLeft
+                "grid": Coordinates(307, 315.5, 188.85, 226.5),
+                "panelLeft": Coordinates(x=1255),
+                "name": Coordinates(1325, 118, 285, 50),
+                "level": Coordinates(1325, 192, 130, 42),
+                "cost": Coordinates(1400, 244, 140, 40),
+                "rarityLine": Coordinates(1330, 402, 480, 16),
+                "statsArea": Coordinates(1325, 440, 560, 470),
+                "panelScroll": Coordinates(1600, 700),
+                "sortButton": Coordinates(443, 988),
+                "sortLevel": Coordinates(358, 625),
+                "sortDirection": Coordinates(672, 988)
             },
             "achievements": {
                 "status": Coordinates(1579, 230, 256, 65),
@@ -119,7 +130,18 @@ COORDINATES = {
                     Coordinates(1309, 824),
                     Coordinates(1146, 924),
                     Coordinates(943, 963)
-                ]
+                ],
+                # equipped echo slots on the echo section (top to bottom),
+                # and the detail panel of the swap screen a slot click opens
+                "equipSlots": [
+                    Coordinates(1460, 275),
+                    Coordinates(1527, 495),
+                    Coordinates(1517, 635),
+                    Coordinates(1487, 775),
+                    Coordinates(1415, 905)
+                ],
+                "echoPanel": Coordinates(1500, 140, 360, 660),
+                "echoCost": Coordinates(1500, 185, 150, 34)
             }
         }
     },
@@ -157,13 +179,17 @@ COORDINATES = {
                 "rank": Coordinates(1135, 510, 100, 50)
             },
             "echoes": {
-                "page": Coordinates(175, 40, 130, 40),
-                "start": Coordinates(180, 104, 130, 162),
-                "echoCard": Coordinates(1136, 152, 486, 152),
-                "sonata": Coordinates(1135, 400, 486, 408),
-                "mouseMovement": Coordinates(1576.5, 665.5),
-                "fullStatsName": Coordinates(1200, 420, 320, 380),
-                "fullStatsValue": Coordinates(1510, 420, 100, 380)
+                "grid": Coordinates(269, 307, 165, 220),
+                "panelLeft": Coordinates(x=1098),
+                "name": Coordinates(1159, 115, 249, 49),
+                "level": Coordinates(1159, 187, 114, 41),
+                "cost": Coordinates(1225, 237, 123, 39),
+                "rarityLine": Coordinates(1164, 391, 420, 16),
+                "statsArea": Coordinates(1159, 428, 490, 457),
+                "panelScroll": Coordinates(1400, 680),
+                "sortButton": Coordinates(388, 960),
+                "sortLevel": Coordinates(313, 608),
+                "sortDirection": Coordinates(588, 960)
             },
             "achievements": {
                 "status": Coordinates(1579, 197, 256, 65),
@@ -200,7 +226,16 @@ COORDINATES = {
                     Coordinates(1145, 801),
                     Coordinates(1003, 898),
                     Coordinates(825, 936)
-                ]
+                ],
+                "equipSlots": [
+                    Coordinates(1278, 267),
+                    Coordinates(1336, 481),
+                    Coordinates(1327, 617),
+                    Coordinates(1301, 753),
+                    Coordinates(1238, 880)
+                ],
+                "echoPanel": Coordinates(1313, 136, 315, 641),
+                "echoCost": Coordinates(1313, 180, 131, 33)
             }
         }
     }

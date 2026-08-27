@@ -1,217 +1,234 @@
-import os
+import re
 import cv2
-import string
+import time
+import logging
 import numpy as np
-from difflib import get_close_matches as getMatches
-from collections import defaultdict
+from difflib import SequenceMatcher, get_close_matches as getMatches
 
 from scraping.utils import (
     echoesID, echoStats, sonataName
 )
 from scraping.utils import (
-    screenshot, imageToString, convertToBlackWhite,
+    screenshot, imageToString, readTextBoxes, recognizeLine,
     WindowsInputController
 )
 from game.screenInfo import ScreenInfo
 from properties.config import cfg
 
-# Constants
-ROWS, COLS = 4, 6
+logger = logging.getLogger('EchoScraper')
 
-def matchStats(text):
-    stats = set(echoStats)
-    results = []
-    i = 0
-    while i < len(text):
-        if i < len(text) - 1:
-            combinedWord = text[i] + text[i + 1]
-            if combinedWord in stats:
-                results.append(combinedWord)
-                i += 2
-                continue
-        if text[i] in stats:
-            results.append(text[i])
-        i += 1
-    return results
+GRID_ROWS = 4
 
-def setupRarityDetection():
-    rarityColors = {
-        5: np.array([90, 230, 255]),
-        4: np.array([255, 109, 202]),
-        3: np.array([211, 180, 89]),
-        2: np.array([94, 195, 92]),
-        1: np.array([225, 236, 239])
-    }
+def gridColumns(screenInfo: ScreenInfo) -> int:
+    """Number of grid columns that fit between the grid origin and the
+    detail panel (6 at 16:9, more on ultrawide)."""
+    grid = screenInfo.echoes.grid
+    return int((screenInfo.echoes.panelLeft.x - grid.x) // grid.w) + 1
 
-    tolerance = 10
-    bounds = {rarity: (color - tolerance, color + tolerance) for rarity, color in rarityColors.items()}
+def cellCenter(screenInfo: ScreenInfo, col: int, row: int) -> tuple[float, float]:
+    grid = screenInfo.echoes.grid
+    return grid.x + grid.w * col, grid.y + grid.h * row - grid.h * 0.45
 
-    return bounds
+def capturePanel(screenInfo: ScreenInfo):
+    return screenshot(width=screenInfo.width, height=screenInfo.height, monitor=screenInfo.monitor,
+                      originX=screenInfo.originX, originY=screenInfo.originY)
 
-RARITY_BOUNDS = setupRarityDetection()
+def cropROI(image: np.ndarray, roi):
+    return image[int(roi.y):int(roi.y + roi.h), int(roi.x):int(roi.x + roi.w)]
 
-def getRarity(image: np.ndarray):
-    for rarity, (lower, upper) in RARITY_BOUNDS.items():
-        if np.any(cv2.inRange(image, lower, upper)):
-            return rarity
-    return 1
+def matchEchoName(name: str) -> str | None:
+    name = name.replace('-', 'ー').lower().replace(' ', '')
+    if name in echoesID:
+        return name
+    result = getMatches(name, echoesID, 1, 0.85) or getMatches(name, echoesID, 1, 0.7)
+    if result:
+        return result[0]
+    if len(name) >= 3:
+        containing = [candidate for candidate in echoesID if name in candidate]
+        if len(containing) == 1:
+            return containing[0]
+    return None
 
-def getEchoPages(screenInfo: ScreenInfo) -> int:
-    image = screenshot(width=screenInfo.width, height=screenInfo.height, monitor=screenInfo.monitor, originX=screenInfo.originX, originY=screenInfo.originY)[screenInfo.echoes.page.y:screenInfo.echoes.page.y + screenInfo.echoes.page.h, screenInfo.echoes.page.x:screenInfo.echoes.page.x + screenInfo.echoes.page.w]
-    echoCount = imageToString(image, allowedChars=string.digits + '/').split('/')[0]
-    
-    try: return int(echoCount), int(np.ceil(int(echoCount) / 24))
-    except ValueError: return 24, 1
+def matchStatName(text: str) -> str | None:
+    """Resolve an OCR'd stat row label (often prefixed with the stat icon
+    read as a stray glyph) to a canonical stat key."""
+    text = text.lower().replace(' ', '').replace('.', '')
+    for candidate in (text, text[1:]):
+        if candidate in echoStats:
+            return echoStats[candidate]
+        hit = getMatches(candidate, echoStats, 1, 0.75)
+        if hit:
+            return echoStats[hit[0]]
+    return None
 
-def processEcho(name: str, level: int, tuneLv: int, sonata: str, rarity: int, stats: dict) -> dict[str, dict[int, int, dict]]:
-    result = getMatches(name, echoesID, 1, 0.9)
-    if result: name = result[0]
-    
-    echoID = str(echoesID.get(name, name))
-    return {
-        echoID: {
-            'level': level,
-            'tuneLv': tuneLv,
-            'sonata': sonata,
-            'rarity': rarity,
-            'stats': stats
-        }
-    }
+RARITY_COLORS = {
+    5: np.array([255, 205, 90]),
+    4: np.array([205, 130, 255]),
+    3: np.array([100, 180, 255]),
+    2: np.array([120, 220, 120]),
+}
 
-def processStats(image: np.ndarray, screenInfo: ScreenInfo, _cache: dict) -> dict[str:int]:
-    stats = defaultdict(dict)
-    tuneLv = 0
+def readRarity(image: np.ndarray, screenInfo: ScreenInfo) -> int:
+    line = cropROI(image, screenInfo.echoes.rarityLine)
+    if line.size == 0:
+        return 5
+    mean = line.reshape(-1, 3).mean(axis=0)
+    rarity = min(RARITY_COLORS, key=lambda r: np.linalg.norm(RARITY_COLORS[r] - mean))
+    logger.debug(f'Rarity line mean RGB={mean.astype(int)} -> {rarity}')
+    return rarity
 
-    nameImage = image[
-        screenInfo.echoes.fullStatsName.y:screenInfo.echoes.fullStatsName.y + screenInfo.echoes.fullStatsName.h,
-        screenInfo.echoes.fullStatsName.x:screenInfo.echoes.fullStatsName.x + screenInfo.echoes.fullStatsName.w
-    ]
-    nameImage = convertToBlackWhite(nameImage)
-    nameHash = hash(nameImage.tobytes())
+def readStats(image: np.ndarray, screenInfo: ScreenInfo) -> tuple[int, dict]:
+    """Parse the stat rows of the detail panel by pairing left-hand labels
+    with right-hand values on the same line, stopping at the skill section."""
+    area = screenInfo.echoes.statsArea
+    boxes = sorted(readTextBoxes(cropROI(image, area)), key=lambda b: b[1])
 
-    valueImage = image[
-        screenInfo.echoes.fullStatsValue.y:screenInfo.echoes.fullStatsValue.y + screenInfo.echoes.fullStatsValue.h,
-        screenInfo.echoes.fullStatsValue.x:screenInfo.echoes.fullStatsValue.x + screenInfo.echoes.fullStatsValue.w
-    ]
-    valueImage = convertToBlackWhite(valueImage)
-    valueHash = hash(valueImage.tobytes())
+    rows = []
+    for x0, y0, x1, y1, text in boxes:
+        if '音骸スキル' in text or 'スキル' == text.strip():
+            break
+        rows.append((x0, (y0 + y1) / 2, text))
 
-    if nameHash in _cache:
-        names = _cache[nameHash]
-    else:
-        # ban digits/punctuation instead of allowing ASCII letters only, so
-        # non-Latin stat names (e.g. Japanese) survive
-        names = imageToString(nameImage, bannedChars=string.digits + string.punctuation + ' ').lower().split('\n')
-        names = matchStats(names)
-        _cache[nameHash] = names
+    labels = [(y, t) for x, y, t in rows if x < area.w * 0.6]
+    values = [(y, t) for x, y, t in rows if x >= area.w * 0.6]
 
-    if valueHash in _cache:
-        values = _cache[valueHash]
-    else:
-        values = imageToString(valueImage, allowedChars=string.digits + '.%').split()
-        _cache[valueHash] = values
-    tuneLv = max(0, len(values) - 2)
-
-
-    for index, (statName, statValue) in enumerate(zip(names, values)):
-        statName = echoStats.get(statName, statName)
-
-        if index < 2: stat = 'main'
-        else: stat = 'sub'
-        
+    stats = {'main': {}, 'sub': {}}
+    count = 0
+    for labelY, labelText in labels:
+        statName = matchStatName(labelText)
+        if not statName:
+            continue
+        value = next((t for y, t in values if abs(y - labelY) < area.h * 0.05), None)
+        if value is None:
+            continue
+        value = value.replace(' ', '')
+        bucket = 'main' if count < 2 else 'sub'
         try:
-            if statValue.endswith('%'):
-                stats[stat].update({f"{statName}%": float(statValue[:-1])})
+            if value.endswith('%'):
+                stats[bucket][f'{statName}%'] = float(value[:-1])
             else:
-                stats[stat].update({statName: int(statValue)})
-        except:
-            stats[stat].update({statName: statValue})
+                stats[bucket][statName] = int(float(value))
+        except ValueError:
+            stats[bucket][statName] = value
+        count += 1
 
-    return tuneLv, dict(stats)
+    tuneLv = max(0, count - 2)
+    return tuneLv, stats
 
-def getSonata(controller: WindowsInputController, screenInfo: ScreenInfo, _cache: dict):
-    controller.moveMouse(screenInfo.echoes.mouseMovement.x, screenInfo.echoes.mouseMovement.y, .2)
-    controller.mouseScroll(-screenInfo.scroll.sonata.y, .3)
-    image = screenshot(screenInfo.echoes.sonata.x, screenInfo.echoes.sonata.y, screenInfo.echoes.sonata.w, screenInfo.echoes.sonata.h, monitor=screenInfo.monitor, originX=screenInfo.originX, originY=screenInfo.originY)
-    sonataHash = hash(image.tobytes())
+def readSonata(controller: WindowsInputController, screenInfo: ScreenInfo) -> str:
+    """Scroll the detail panel down to the harmony section and match any
+    line against the known sonata names."""
+    scrollPos = screenInfo.echoes.panelScroll
+    controller.moveMouse(scrollPos.x, scrollPos.y, .2)
+    controller.mouseScroll(-screenInfo.scroll.sonata.y, .5)
 
-    if sonataHash in _cache:
-        sonata = _cache[sonataHash]
-    else:
-        sonata = imageToString(image, '', bannedChars=' ').lower()
-        for name in sonataName:
-            if name in sonata:
-                _cache[sonataHash] = name
-                sonata = name
-                break
-    
-    controller.moveMouse(screenInfo.echoes.mouseMovement.x, screenInfo.echoes.mouseMovement.y, .2)
+    image = capturePanel(screenInfo)
+    area = screenInfo.echoes.statsArea
+    sonata = str()
+    for x0, y0, x1, y1, text in readTextBoxes(cropROI(image, area)):
+        text = text.lower().replace(' ', '')
+        hit = getMatches(text, sonataName, 1, 0.75)
+        if hit:
+            sonata = hit[0]
+            break
+        containing = [name for name in sonataName if name in text]
+        if containing:
+            sonata = containing[0]
+            break
+
+    controller.moveMouse(scrollPos.x, scrollPos.y, .2)
     controller.mouseScroll(screenInfo.scroll.sonata.y, .3)
     return sonata
 
-def processGridEcho(controller: WindowsInputController, screenInfo: ScreenInfo, echoes: list, image: np.ndarray, _cache: dict[str, list]) -> tuple[dict[str, int], list[dict[str, dict[str, int]]]]:
+def clickSortByLevel(controller: WindowsInputController, screenInfo: ScreenInfo):
+    controller.leftClick(screenInfo.echoes.sortButton.x, screenInfo.echoes.sortButton.y, 1.0)
+    controller.leftClick(screenInfo.echoes.sortLevel.x, screenInfo.echoes.sortLevel.y, 1.2)
 
-    echoCard = image[screenInfo.echoes.echoCard.y:screenInfo.echoes.echoCard.y + screenInfo.echoes.echoCard.h, screenInfo.echoes.echoCard.x:screenInfo.echoes.echoCard.x + screenInfo.echoes.echoCard.w]
-    echoHash = hash(echoCard.tobytes())
-    if echoHash in _cache:
-        info = _cache[echoHash]
-    else:
-        info = [imageToString(echoCard, '', bannedChars=' +').lower().split('\n')]
-        _cache[echoHash] = info
-    name = info[0][0]
-    
-    if name in echoesID:
-        try:
-            rarity = info[1][0]
-        except:
-            rarity = getRarity(echoCard)
-            _cache[echoHash].append(rarity)
-        
-        if rarity >= cfg.get(cfg.echoMinRarity):
-            levelText = info[0][2]
-            
-            try: level = int(levelText)
-            except ValueError: level = 0
-            level = min(25, level)
+def readLevel(image: np.ndarray, screenInfo: ScreenInfo) -> int:
+    text = re.sub(r'[^0-9]', '', recognizeLine(cropROI(image, screenInfo.echoes.level)))
+    try:
+        return min(25, int(text))
+    except ValueError:
+        return 0
 
-            if level >= cfg.get(cfg.echoMinLevel):
-                tuneLv, stats = processStats(image, screenInfo, _cache)
-                sonata = getSonata(controller, screenInfo, _cache)
-                echoes.append(processEcho(name, level, tuneLv, sonata, rarity, stats))
-                return True
-        return False
-
-    return True
-
-def echoScraper(controller: WindowsInputController, x: float, y: float, screenInfo: ScreenInfo) -> tuple[dict[str, int], list[dict[str, dict[str, int]]]]:
+def echoScraper(controller: WindowsInputController, x: float, y: float, screenInfo: ScreenInfo) -> list:
     echoes = list()
-    _cache = dict()
+    seenPanels = set()
+    minRarity = cfg.get(cfg.echoMinRarity)
+    minLevel = cfg.get(cfg.echoMinLevel)
 
     controller.pressKey(cfg.get(cfg.inventoryKeybind), 2, False)
-    controller.leftClick(x, y)
+    controller.leftClick(x, y, 1.5)
+    clickSortByLevel(controller, screenInfo)
 
-    echoCount, pages = getEchoPages(screenInfo)
-    continueScraping = False
+    columns = gridColumns(screenInfo)
+    logger.debug(f'Echo grid: {columns} columns x {GRID_ROWS} rows')
 
-    for page in range(pages):
-        for row in range(ROWS):
-            for col in range(COLS):
-                if page == pages - 1 and (page * (ROWS * COLS) + row * COLS + col) > (page * 24) + (echoCount % 24):
-                    del _cache
+    # verify descending order; if the first echo is below the level filter
+    # the sort direction is ascending, so flip it once
+    cx, cy = cellCenter(screenInfo, 0, 0)
+    controller.leftClick(cx, cy, 1.0)
+    image = capturePanel(screenInfo)
+    if readLevel(image, screenInfo) < minLevel:
+        controller.leftClick(screenInfo.echoes.sortDirection.x, screenInfo.echoes.sortDirection.y, 1.2)
+
+    lastPanelHash = None
+    for page in range(200):
+        newOnPage = 0
+        for row in range(GRID_ROWS):
+            for col in range(columns):
+                cx, cy = cellCenter(screenInfo, col, row)
+                controller.leftClick(cx, cy, .9)
+                image = capturePanel(screenInfo)
+
+                panelCrop = cropROI(image, screenInfo.echoes.statsArea)
+                panelHash = hash(panelCrop.tobytes())
+                if panelHash == lastPanelHash:
+                    # clicking an empty slot leaves the panel unchanged:
+                    # end of the list
+                    logger.debug(f'End of echo list at page {page} row {row} col {col}')
                     return echoes
-                center_x = screenInfo.echoes.start.x + (col * (screenInfo.echoes.start.w + screenInfo.offsets.page.x)) + screenInfo.echoes.start.w // 2
-                center_y = screenInfo.echoes.start.y + (row * (screenInfo.echoes.start.h + screenInfo.offsets.page.y)) + screenInfo.echoes.start.h // 2
-                
-                controller.leftClick(center_x, center_y)
-                image = screenshot(width=screenInfo.width, height=screenInfo.height, monitor=screenInfo.monitor, originX=screenInfo.originX, originY=screenInfo.originY)
-                
-                continueScraping = processGridEcho(controller, screenInfo, echoes, image, _cache)
-                if not continueScraping:
-                    del _cache
+                lastPanelHash = panelHash
+
+                level = readLevel(image, screenInfo)
+                if level < minLevel:
+                    logger.debug(f'Level {level} below threshold {minLevel}; stopping')
                     return echoes
 
-        if page < pages - 1 and continueScraping:
-            controller.mouseScroll(screenInfo.scroll.page.y, 1.2)
+                if panelHash in seenPanels:
+                    continue
+                seenPanels.add(panelHash)
+                newOnPage += 1
 
-    del _cache
+                name = recognizeLine(cropROI(image, screenInfo.echoes.name))
+                matched = matchEchoName(name)
+                if not matched:
+                    logger.debug(f'Unmatched echo name: {name!r}')
+                    continue
+
+                rarity = readRarity(image, screenInfo)
+                if rarity < minRarity:
+                    continue
+
+                tuneLv, stats = readStats(image, screenInfo)
+                sonata = readSonata(controller, screenInfo)
+
+                echoes.append({
+                    str(echoesID[matched]): {
+                        'level': level,
+                        'tuneLv': tuneLv,
+                        'sonata': sonata,
+                        'rarity': rarity,
+                        'stats': stats
+                    }
+                })
+
+        if newOnPage == 0:
+            logger.debug(f'No new echoes on page {page}; stopping')
+            break
+
+        gridCenterX = screenInfo.echoes.grid.x + screenInfo.echoes.grid.w * (columns - 1) / 2
+        controller.moveMouse(gridCenterX, screenInfo.echoes.grid.y + screenInfo.echoes.grid.h, .3)
+        controller.mouseScroll(screenInfo.scroll.page.y, 1.2)
+
     return echoes

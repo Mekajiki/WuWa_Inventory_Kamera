@@ -18,11 +18,13 @@ def main() -> int:
     time.sleep(.8)
 
     menu = MainMenuController()
-    if not menu.isMenu():
+    for _ in range(4):
+        if menu.isMenu():
+            break
         WindowsInputController.pressKey('esc', 1.5)
-        if not menu.isMenu():
-            print('RESULT: could not reach the ESC menu (close any open screens in-game)')
-            return 1
+    else:
+        print('RESULT: could not reach the ESC menu (close any open screens in-game)')
+        return 1
 
     result = startScraper()
     print(f'RESULT: {result}')

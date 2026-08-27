@@ -321,6 +321,26 @@ class DataUpdater(QObject):
 				self.saveJson(weapons, 'weapons.json')
 				weaponsID.update(weapons)
 
+			echoes = {}
+			for echoID, info in fetchTable('echo').items():
+				name = str(info.get(lang) or info.get('en') or '')
+				if name:
+					echoes[name.lower().replace(' ', '')] = int(echoID)
+			if echoes:
+				self.saveJson(echoes, 'echoes.json')
+				echoesID.update(echoes)
+
+			sonatas = []
+			for info in fetchTable('sonata').values():
+				names = info.get('name', {}) if isinstance(info, dict) else {}
+				name = str(names.get(lang) or names.get('en') or '')
+				if name:
+					sonatas.append(name.lower().replace(' ', ''))
+			if sonatas:
+				self.saveJson(sonatas, 'sonataName.json')
+				sonataName.clear()
+				sonataName.extend(sonatas)
+
 			self.saveJson({'version': version}, 'nanokaVersion.json')
 			logger.info(f'Updated characters/weapons from nanoka.cc (ww {version}, {lang})')
 		except Exception as e:

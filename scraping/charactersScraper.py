@@ -44,6 +44,11 @@ def matchName(name: str, candidates, cutoffs=(0.9, 0.7)) -> str | None:
         result = getMatches(name, candidates, 1, cutoff)
         if result:
             return result[0]
+    # OCR misreads drift (秋秋・玄胡一 / 秋秋・玄舗一 / ...), so also match
+    # fuzzily against known alias keys instead of listing every variant
+    aliasHit = getMatches(name, nameAliases, 1, 0.8)
+    if aliasHit:
+        return nameAliases[aliasHit[0]]
     if len(name) >= 2:
         containing = [candidate for candidate in candidates if name in candidate]
         if len(containing) == 1:

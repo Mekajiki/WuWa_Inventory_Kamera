@@ -49,7 +49,7 @@ COORDINATES = {
                 "page": Coordinates(y=-31.25),
                 # ~3 list entries per pass, leaving generous overlap with the
                 # previous page so the duplicate-skip logic never misses anyone
-                "characters": Coordinates(y=-22),
+                "characters": Coordinates(y=-15),
                 "sonata": Coordinates(y=70)
             },
             "scrapers": {

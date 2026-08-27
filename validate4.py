@@ -6,7 +6,7 @@ from collections import defaultdict
 from game.screenInfo import ScreenInfo
 from scraping.charactersScraper import scrapeResonator, scrapeWeapon, scrapeSkills, scrapeChain
 
-si = ScreenInfo(2560, 1440)
+si = ScreenInfo(5120, 2160)
 
 def load(name):
     return cv2.cvtColor(cv2.imread(name), cv2.COLOR_BGR2RGB)

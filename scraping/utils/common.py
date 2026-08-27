@@ -96,19 +96,38 @@ def convertToBlackWhite(image: np.ndarray):
 
     return sharpened
 
-# normalize full-width digits and symbols the game renders (e.g. ランク５)
-FULLWIDTH_TABLE = str.maketrans('０１２３４５６７８９／％．＋－', '0123456789/%.+-')
+# normalize full-width digits and symbols the game renders (e.g. ランク５),
+# plus the middle dot variant PP-OCRv5 emits for ・
+FULLWIDTH_TABLE = str.maketrans('０１２３４５６７８９／％．＋－·', '0123456789/%.+-・')
+
+def _prepare(image: np.ndarray) -> np.ndarray:
+    """Pad the crop (border-touching text defeats detection) and make sure
+    it has three channels."""
+    image = cv2.copyMakeBorder(image, 10, 10, 10, 10, cv2.BORDER_REPLICATE)
+    if image.ndim == 2:
+        image = cv2.cvtColor(image, cv2.COLOR_GRAY2RGB)
+    return image
+
+def _resultPairs(result) -> list:
+    """Normalize a RapidOCR result to (box, text) pairs — small inputs skip
+    detection automatically and come back without boxes."""
+    texts = getattr(result, 'txts', None) or ()
+    boxes = getattr(result, 'boxes', None)
+    if boxes is None:
+        boxes = [[[0, 0], [1, 0], [1, 1], [0, 1]]] * len(texts)
+    return list(zip(boxes, texts))
 
 def readTextBoxes(image: np.ndarray) -> list[tuple[float, float, float, float, str]]:
     """Run OCR and return (x0, y0, x1, y1, text) boxes in image coordinates."""
-    padded = cv2.copyMakeBorder(image, 10, 10, 10, 10, cv2.BORDER_REPLICATE)
     try:
-        results = ocr(padded)[0] or []
+        # update_params persists per-call overrides on the shared instance,
+        # so always pass the stage flags explicitly
+        result = ocr(_prepare(image), use_det=True, use_cls=False, use_rec=True)
     except:
-        results = []
+        return []
 
     boxes = []
-    for bbox, text, _ in results:
+    for bbox, text in _resultPairs(result):
         xs = [point[0] for point in bbox]
         ys = [point[1] for point in bbox]
         boxes.append((min(xs) - 10, min(ys) - 10, max(xs) - 10, max(ys) - 10, text.translate(FULLWIDTH_TABLE)))
@@ -119,12 +138,9 @@ def recognizeLine(image: np.ndarray) -> str:
     detection stage entirely — detection tends to fragment or miss short
     single-line crops such as names."""
     try:
-        image = cv2.copyMakeBorder(image, 10, 10, 10, 10, cv2.BORDER_REPLICATE)
-        if image.ndim == 2:
-            image = cv2.cvtColor(image, cv2.COLOR_GRAY2RGB)
-        results, _ = ocr.text_recognizer([image])
-        if results and results[0][0]:
-            return results[0][0].translate(FULLWIDTH_TABLE).strip()
+        result = ocr(_prepare(image), use_det=False, use_cls=False, use_rec=True)
+        if result.txts and result.txts[0]:
+            return result.txts[0].translate(FULLWIDTH_TABLE).strip()
     except:
         pass
     return ''
@@ -136,24 +152,21 @@ def imageToString(
     bannedChars: str = None
 ) -> str:
     try:
-        # pad the image so text touching the crop edges is still found by the
-        # detection model (DBNet suppresses regions that touch the border)
-        image = cv2.copyMakeBorder(image, 10, 10, 10, 10, cv2.BORDER_REPLICATE)
-        ocrResults = ocr(image)[0]
+        image = _prepare(image)
+        ocrResults = _resultPairs(ocr(image, use_det=True, use_cls=False, use_rec=True))
         if not ocrResults:
             # small crops often defeat the detection stage entirely even
             # though the recognizer reads them fine; treat the whole crop
-            # as a single line of text (the recognizer needs 3 channels)
-            recInput = cv2.cvtColor(image, cv2.COLOR_GRAY2RGB) if image.ndim == 2 else image
-            recResults, _ = ocr.text_recognizer([recInput])
-            if recResults and recResults[0][0]:
-                ocrResults = [([[0, 0], [1, 0], [1, 1], [0, 1]], recResults[0][0], recResults[0][1])]
+            # as a single line of text
+            ocrResults = _resultPairs(ocr(image, use_det=False, use_cls=False, use_rec=True))
+            if not ocrResults:
+                return ''
 
         banned_pattern = re.compile(f"[{re.escape(bannedChars)}]") if bannedChars else None
         allowed_pattern = re.compile(f"[^{re.escape(allowedChars)}]") if allowedChars else None
 
         lines = []
-        for bbox, text, _ in ocrResults:
+        for bbox, text in ocrResults:
             text = text.translate(FULLWIDTH_TABLE)
             if banned_pattern:
                 text = banned_pattern.sub('', text)

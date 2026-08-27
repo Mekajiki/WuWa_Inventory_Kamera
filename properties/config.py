@@ -3,7 +3,8 @@ import json
 import string
 import urllib.request
 from pathlib import Path
-from rapidocr_onnxruntime import RapidOCR
+from rapidocr import RapidOCR
+from rapidocr.utils.typings import OCRVersion, ModelType, LangDet, LangRec
 from qfluentwidgets import (
 	qconfig, QConfig, ConfigValidator,
 	ConfigItem, OptionsConfigItem, BoolValidator,
@@ -126,29 +127,22 @@ RELEASE_URL = "https://github.com/Psycho-Marcus/WuWa_Inventory_Kamera/releases/l
 cfg = Config()
 qconfig.load('config/config.json', cfg)
 
-# Language-specific OCR recognition models (RapidOCR's default model covers Chinese + English only)
-OCR_MODELS = {
-	'ja': (
-		'https://modelscope.cn/models/RapidAI/RapidOCR/resolve/master/onnx/PP-OCRv4/rec/japan_PP-OCRv4_rec_mobile.onnx',
-		'https://modelscope.cn/models/RapidAI/RapidOCR/resolve/master/paddle/PP-OCRv4/rec/japan_PP-OCRv4_rec_mobile/japan_dict.txt'
-	),
-}
-
 def _createOCR() -> RapidOCR:
+	# PP-OCRv5's Chinese model natively covers Japanese (kana included),
+	# English, and Chinese — noticeably more accurate than the per-language
+	# PP-OCRv4 mobile models. Korean needs its own recognition model.
 	langCode = LANGUAGES.get(cfg.get(cfg.gameLanguage), 'en')
-	urls = OCR_MODELS.get(langCode)
-	if urls:
-		modelDIR = basePATH / 'data' / 'models'
-		recPATH = modelDIR / f'{langCode}_rec.onnx'
-		keysPATH = modelDIR / f'{langCode}_dict.txt'
-		try:
-			modelDIR.mkdir(parents=True, exist_ok=True)
-			for url, filePATH in zip(urls, (recPATH, keysPATH)):
-				if not filePATH.exists():
-					urllib.request.urlretrieve(url, filePATH)
-			return RapidOCR(rec_model_path=str(recPATH), rec_keys_path=str(keysPATH))
-		except Exception:
-			pass
-	return RapidOCR()
+	recLang = LangRec.KOREAN if langCode == 'ko' else LangRec.CH
+	recModel = ModelType.MOBILE if recLang == LangRec.KOREAN else ModelType.SERVER
+
+	return RapidOCR(params={
+		'Det.ocr_version': OCRVersion.PPOCRV5,
+		'Det.model_type': ModelType.MOBILE,
+		'Det.lang_type': LangDet.CH,
+		'Rec.ocr_version': OCRVersion.PPOCRV5,
+		'Rec.model_type': recModel,
+		'Rec.lang_type': recLang,
+		'Global.use_cls': False,
+	})
 
 ocr = _createOCR()

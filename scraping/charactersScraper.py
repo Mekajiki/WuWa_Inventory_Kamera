@@ -32,10 +32,22 @@ SKILL_LEGENDS = {
 }
 ASCENSION_LEVELS = [20, 40, 50, 60, 70, 80, 90]
 
+# kanji that OCR confuses with identical-looking katakana
+KANA_LOOKALIKES = str.maketrans('二工力口夕卜', 'ニエカロタト')
+
 def matchName(name: str, candidates, cutoffs=(0.9, 0.7)) -> str | None:
     """Resolve an OCR'd name against known names: alias table, exact match,
-    fuzzy match, then unique-substring containment (OCR often drops chars)."""
+    fuzzy match, then unique-substring containment (OCR often drops chars).
+    A katakana-normalized variant is tried as well, since the recognizer
+    reads e.g. モーニエ as モー二工."""
     name = name.replace('-', 'ー')
+    for variant in dict.fromkeys((name, name.translate(KANA_LOOKALIKES))):
+        result = _matchOne(variant, candidates, cutoffs)
+        if result:
+            return result
+    return None
+
+def _matchOne(name: str, candidates, cutoffs) -> str | None:
     if name in nameAliases:
         return nameAliases[name]
     if name in candidates:
@@ -53,6 +65,10 @@ def matchName(name: str, candidates, cutoffs=(0.9, 0.7)) -> str | None:
         containing = [candidate for candidate in candidates if name in candidate]
         if len(containing) == 1:
             return containing[0]
+    # trailing noise glyphs (ルパ・ア): a known name as unique prefix
+    prefixes = [candidate for candidate in candidates if len(candidate) >= 2 and name.startswith(candidate)]
+    if len(prefixes) == 1:
+        return prefixes[0]
     return None
 
 def splitLevel(text: str) -> list[str]:
@@ -66,9 +82,10 @@ def splitLevel(text: str) -> list[str]:
     return [text]
 
 def scrapeResonator(image: np.ndarray, screenInfo: ScreenInfo, characters: dict, _cache: dict) -> tuple[str, bool]:
+    # hash the binarized crop (stable against the animated background) but
+    # OCR the color crop — binarization hurts the PP-OCRv5 recognizer
     resonatorNameImage = image[screenInfo.characters.resonatorName.y:screenInfo.characters.resonatorName.y + screenInfo.characters.resonatorName.h, screenInfo.characters.resonatorName.x:screenInfo.characters.resonatorName.x + screenInfo.characters.resonatorName.w]
-    resonatorNameImage = convertToBlackWhite(resonatorNameImage)
-    resonatorNameHash = hash(resonatorNameImage.tobytes())
+    resonatorNameHash = hash(convertToBlackWhite(resonatorNameImage).tobytes())
 
     if resonatorNameHash in _cache:
         return None, True
@@ -127,8 +144,7 @@ def scrapeResonator(image: np.ndarray, screenInfo: ScreenInfo, characters: dict,
 
 def scrapeWeapon(image: np.ndarray, screenInfo: ScreenInfo, characters: dict, resonatorID: str, _cache: dict):
     weaponNameImage = image[screenInfo.characters.weaponName.y:screenInfo.characters.weaponName.y + screenInfo.characters.weaponName.h, screenInfo.characters.weaponName.x:screenInfo.characters.weaponName.x + screenInfo.characters.weaponName.w]
-    weaponNameImage = convertToBlackWhite(weaponNameImage)
-    weaponNameHash = hash(weaponNameImage.tobytes())
+    weaponNameHash = hash(convertToBlackWhite(weaponNameImage).tobytes())
 
     if weaponNameHash in _cache:
         weaponID = _cache[weaponNameHash]
@@ -209,7 +225,7 @@ def parseEquippedEcho(image: np.ndarray, screenInfo: ScreenInfo):
     """Parse the right-hand panel of the echo swap screen (opened by clicking
     an equipped slot): name, +level, cost, two main stats, up to five
     substats, and the sonata name — all visible without scrolling."""
-    from scraping.echoesScraper import matchEchoName, matchStatName, normalizeValue
+    from scraping.echoesScraper import matchEchoName, matchStatName, matchSonata, normalizeValue
     from scraping.utils import echoesID, sonataName
 
     panel = screenInfo.characters.echoPanel
@@ -236,13 +252,18 @@ def parseEquippedEcho(image: np.ndarray, screenInfo: ScreenInfo):
             harmonyY = y0
             continue
         if harmonyY is not None and harmonyY >= 0 and y0 > harmonyY and not sonata:
-            candidate = text.lower().replace(' ', '')
-            hit = getMatches(candidate, sonataName, 1, 0.75)
-            if hit:
-                sonata = hit[0]
+            sonata = matchSonata(text)
             continue
         if harmonyY is None and name is not None and 'COST' not in text.upper():
             statRows.append((x0, (y0 + y1) / 2, text))
+
+    if not sonata:
+        # the ハーモニー効果 heading itself sometimes misreads; try every
+        # remaining line against the known sonata names
+        for x0, y0, x1, y1, text in boxes:
+            sonata = matchSonata(text)
+            if sonata:
+                break
 
     matched = matchEchoName(name or '')
     if not matched:

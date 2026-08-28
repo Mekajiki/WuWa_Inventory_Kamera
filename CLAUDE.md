@@ -38,18 +38,26 @@ Psycho-Marcus/WuWa_Inventory_Kamera のフォークで、本家は 2025-09 か�
 - GitHub API を叩くときも WSL の `gh api`(認証済みでレート制限に余裕)。
   素の HTTP は 60回/時で枯渇しやすい
 
-## OCR の知見 (rapidocr_onnxruntime 1.2.3)
+## OCR の知見 (rapidocr 3.x + PP-OCRv5)
 
-- **det (検出) は小さな1行クロップを壊す**: 名前のような単行テキストは
-  `recognizeLine()` (rec 直行) を使う。det は断片化 (アールト→ルト) や全落ちする
-- ただし **フォントサイズ混在の行 (Lv 90/90) は逆に det 経由が安定**。
-  rec 直行だと「9」だけ返ることがある → レベルは `imageToString` のまま
-- rec に渡す画像は **3チャンネル必須**(グレースケールだと例外→握り潰されて空文字)
-- det は端に接した文字を落とす → `imageToString` は10pxパディングを入れている
-- 全角数字/記号 (ランク５ 等) は `FULLWIDTH_TABLE` で正規化
-- 日本語モデルは辞書がONNXメタデータに埋め込み済み (rec_keys_path 指定は
-  1.2.3 では効かないが不要)
-- スラッシュ欠落対策: `splitLevel()` (末尾2桁を上限値とみなすフォールバック)
+- rapidocr 3.9.2、det=PP-OCRv5 mobile / rec=PP-OCRv5 **ch server**
+  (v5のchモデルは日本語かな込みで公式カバー、精度はv4 japan mobileより大幅に上。
+  韓国語のみ korean rec を使う)。モデルは初回に site-packages/rapidocr/models へ自動DL
+- **`ocr(img, use_det=..)` のオプションはインスタンスに残留する**
+  (update_params が保存される)→ 全呼び出しで use_det/use_cls/use_rec を明示必須
+- 小さい入力は自動でdetスキップされ boxes 無しの結果が返る → `_resultPairs` で正規化
+- **v5はカタカナを同形漢字に読む癖**(ニ→二、エ→工、カ→力、ト→卜等)→
+  照合時に `KANA_LOOKALIKES` 正規化バリアントも試す
+- **白黒二値化はv5には逆効果**(自然画像で学習)→ OCRはカラー crop、
+  ハッシュ(重複検出)だけ二値化画像で取る
+- det は端に接した文字を落とす → 10pxパディング(`_prepare`)
+- 単行フィールド(名前等)は `recognizeLine()`(rec直行)、
+  フォントサイズ混在の行(Lv 90/90)は det 経由の `imageToString` が安定
+- 全角数字/記号/中黒(・と·)は `FULLWIDTH_TABLE` で正規化
+- スラッシュ欠落対策: `splitLevel()`、小数点カンマ誤読対策: `normalizeValue()`
+- 照合の多段構え: エイリアス表(exact→fuzzy0.8) → 完全一致 → fuzzy →
+  一意部分一致 → 一意前方一致。誤読変種は基本これで吸収され、
+  nameAliases.json への追記が必要なケースは稀になった
 
 ## 名前照合
 

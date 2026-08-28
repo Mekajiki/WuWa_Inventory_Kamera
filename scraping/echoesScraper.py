@@ -43,8 +43,18 @@ def capturePanel(screenInfo: ScreenInfo):
 def cropROI(image: np.ndarray, roi):
     return image[int(roi.y):int(roi.y + roi.h), int(roi.x):int(roi.x + roi.w)]
 
+# kanji that OCR confuses with identical-looking katakana
+KANA_LOOKALIKES = str.maketrans('二工力口夕卜', 'ニエカロタト')
+
 def matchEchoName(name: str) -> str | None:
     name = name.replace('-', 'ー').lower().replace(' ', '')
+    for variant in dict.fromkeys((name, name.translate(KANA_LOOKALIKES))):
+        result = _matchEchoOne(variant)
+        if result:
+            return result
+    return None
+
+def _matchEchoOne(name: str) -> str | None:
     if name in nameAliases:
         return nameAliases[name]
     if name in echoesID:
@@ -60,6 +70,20 @@ def matchEchoName(name: str) -> str | None:
         if len(containing) == 1:
             return containing[0]
     return None
+
+def matchSonata(text: str) -> str:
+    """Match a line of panel text against the known sonata names."""
+    text = text.lower().replace(' ', '')
+    if not text or len(text) > 16:
+        return str()
+    for variant in dict.fromkeys((text, text.translate(KANA_LOOKALIKES))):
+        hit = getMatches(variant, sonataName, 1, 0.75) or getMatches(variant, sonataName, 1, 0.6)
+        if hit:
+            return hit[0]
+        containing = [name for name in sonataName if name in variant or (len(variant) >= 4 and variant in name)]
+        if len(containing) == 1:
+            return containing[0]
+    return str()
 
 def matchStatName(text: str) -> str | None:
     """Resolve an OCR'd stat row label (often prefixed with the stat icon
@@ -138,14 +162,8 @@ def readSonata(controller: WindowsInputController, screenInfo: ScreenInfo) -> st
     area = screenInfo.echoes.statsArea
     sonata = str()
     for x0, y0, x1, y1, text in readTextBoxes(cropROI(image, area)):
-        text = text.lower().replace(' ', '')
-        hit = getMatches(text, sonataName, 1, 0.75)
-        if hit:
-            sonata = hit[0]
-            break
-        containing = [name for name in sonataName if name in text]
-        if containing:
-            sonata = containing[0]
+        sonata = matchSonata(text)
+        if sonata:
             break
 
     controller.moveMouse(scrollPos.x, scrollPos.y, .2)

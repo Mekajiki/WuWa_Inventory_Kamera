@@ -234,28 +234,49 @@ def parseEquippedEcho(image: np.ndarray, screenInfo: ScreenInfo):
     if not boxes:
         return None
 
-    name, level, sonata = None, 0, str()
+    costY = next((y0 for x0, y0, x1, y1, text in boxes if 'COST' in text.upper()), panel.h * 0.12)
+
+    level, sonata = 0, str()
+    nameParts = []
     statRows = []
     harmonyY = None
+    skillY = None
     for x0, y0, x1, y1, text in boxes:
         text = text.strip()
-        if found := re.fullmatch(r'\+(\d+)', text):
-            level = min(25, int(found.group(1)))
+        if y0 < costY - 4:
+            # name area: long names wrap onto a second line, and the +N
+            # level marker sometimes merges into the same box as the name
+            found = re.search(r'\+(\d+)$', text)
+            if found:
+                level = max(level, min(25, int(found.group(1))))
+                text = text[:found.start()].strip()
+            if text:
+                nameParts.append((y0, x0, text))
             continue
-        if name is None and x0 < panel.w * 0.5:
-            name = text
+        if found := re.fullmatch(r'\+(\d+)', text):
+            level = max(level, min(25, int(found.group(1))))
             continue
         if '音骸スキル' in text:
-            harmonyY = -1  # stats section is over
+            skillY = y0
             continue
         if 'ハーモニー効果' in text:
             harmonyY = y0
             continue
-        if harmonyY is not None and harmonyY >= 0 and y0 > harmonyY and not sonata:
+        if harmonyY is not None and y0 > harmonyY and not sonata:
             sonata = matchSonata(text)
             continue
-        if harmonyY is None and name is not None and 'COST' not in text.upper():
+        if skillY is None and harmonyY is None and 'COST' not in text.upper():
             statRows.append((x0, (y0 + y1) / 2, text))
+
+    name = ''.join(text for _, _, text in sorted(nameParts))
+
+    if level == 0:
+        # the +N box occasionally goes unread entirely; retry with a
+        # targeted crop next to the name
+        roi = screenInfo.characters.echoLevel
+        found = re.search(r'(\d+)', recognizeLine(image[int(roi.y):int(roi.y + roi.h), int(roi.x):int(roi.x + roi.w)]))
+        if found:
+            level = min(25, int(found.group(1)))
 
     if not sonata:
         # the ハーモニー効果 heading itself sometimes misreads; try every

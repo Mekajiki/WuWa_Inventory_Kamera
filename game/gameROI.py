@@ -23,6 +23,7 @@ ULTRAWIDE_ANCHORS = {
     'characters.equipSlots': 'center',
     'characters.echoPanel': 'right',
     'characters.echoCost': 'right',
+    'characters.echoLevel': 'right',
     'characters.skillStrip': 'center',
     'characters.skillColumns': 'center',
     'items.info': 'right',
@@ -141,7 +142,8 @@ COORDINATES = {
                     Coordinates(1415, 905)
                 ],
                 "echoPanel": Coordinates(1500, 140, 360, 820),
-                "echoCost": Coordinates(1500, 185, 150, 34)
+                "echoCost": Coordinates(1500, 185, 150, 34),
+                "echoLevel": Coordinates(1765, 140, 100, 42)
             }
         }
     },
@@ -235,7 +237,8 @@ COORDINATES = {
                     Coordinates(1238, 880)
                 ],
                 "echoPanel": Coordinates(1313, 136, 315, 797),
-                "echoCost": Coordinates(1313, 180, 131, 33)
+                "echoCost": Coordinates(1313, 180, 131, 33),
+                "echoLevel": Coordinates(1544, 136, 88, 41)
             }
         }
     }

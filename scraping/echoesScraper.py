@@ -47,7 +47,8 @@ def cropROI(image: np.ndarray, roi):
 KANA_LOOKALIKES = str.maketrans('二工力口夕卜', 'ニエカロタト')
 
 def matchEchoName(name: str) -> str | None:
-    name = name.replace('-', 'ー').lower().replace(' ', '')
+    # the game renders full-width parentheses (（幼体）)
+    name = name.replace('-', 'ー').replace('(', '（').replace(')', '）').lower().replace(' ', '')
     for variant in dict.fromkeys((name, name.translate(KANA_LOOKALIKES))):
         result = _matchEchoOne(variant)
         if result:
@@ -59,7 +60,9 @@ def _matchEchoOne(name: str) -> str | None:
         return nameAliases[name]
     if name in echoesID:
         return name
-    result = getMatches(name, echoesID, 1, 0.85) or getMatches(name, echoesID, 1, 0.7)
+    result = (getMatches(name, echoesID, 1, 0.85)
+              or getMatches(name, echoesID, 1, 0.7)
+              or getMatches(name, echoesID, 1, 0.65))
     if result:
         return result[0]
     aliasHit = getMatches(name, nameAliases, 1, 0.8)

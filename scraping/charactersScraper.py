@@ -110,6 +110,13 @@ def scrapeResonator(image: np.ndarray, screenInfo: ScreenInfo, characters: dict,
             except Exception:
                 pass
         
+        # a character named 漂泊者〜 is an event trial: the player's own Rover
+        # always displays their custom name instead
+        if result and result.startswith('漂泊者'):
+            logger.debug(f'Skipping trial character {result!r}')
+            _cache[resonatorNameHash] = ''
+            return None, True
+
         roverName = cfg.get(cfg.roverName).replace(' ', '').lower()
         # OCR sometimes drops a trailing kana, so match the Rover name fuzzily
         isRover = resonatorName == roverName or SequenceMatcher(None, resonatorName, roverName).ratio() >= .7
@@ -225,7 +232,7 @@ def parseEquippedEcho(image: np.ndarray, screenInfo: ScreenInfo):
     """Parse the right-hand panel of the echo swap screen (opened by clicking
     an equipped slot): name, +level, cost, two main stats, up to five
     substats, and the sonata name — all visible without scrolling."""
-    from scraping.echoesScraper import matchEchoName, matchStatName, matchSonata, normalizeValue
+    from scraping.echoesScraper import matchEchoName, matchStatName, matchSonata, normalizeValue, echoCosts
     from scraping.utils import echoesID, sonataName
 
     panel = screenInfo.characters.echoPanel
@@ -313,13 +320,39 @@ def parseEquippedEcho(image: np.ndarray, screenInfo: ScreenInfo):
             stats[bucket][statName] = value
         count += 1
 
-    cost = re.sub(r'[^0-9]', '', recognizeLine(image[int(screenInfo.characters.echoCost.y):int(screenInfo.characters.echoCost.y + screenInfo.characters.echoCost.h), int(screenInfo.characters.echoCost.x):int(screenInfo.characters.echoCost.x + screenInfo.characters.echoCost.w)]))
+    # each echo species has a fixed cost (1, 3, or 4). The second main stat
+    # pins the cost class exactly (flat HP -> 1; flat ATK is 30+4.8/lv for
+    # cost 4 and 20+3.2/lv for cost 3), so use it to catch names that
+    # matched the wrong variant (e.g. a （幼体） suffix lost by the OCR).
+    main = stats['main']
+    mainKeys = set(main)
+    inferred = None
+    if mainKeys & {'cr%', 'cd%', 'healing%'}:
+        inferred = 4  # these primary mains exist only on cost-4 echoes
+    elif mainKeys & {'glacio%', 'fusion%', 'electro%', 'aero%', 'spectro%', 'havoc%', 'er%'}:
+        inferred = 3  # element damage and ER mains exist only on cost 3
+    elif 'hp' in main:
+        inferred = 1  # a flat-HP secondary main means cost 1
+    elif main.get('atk'):
+        inferred = min((4, 3), key=lambda c: abs(main['atk'] - ((30 + 4.8 * level) if c == 4 else (20 + 3.2 * level))))
+
+    cost = echoCosts.get(str(echoesID[matched]))
+    if inferred and cost != inferred:
+        alternate = next((candidate for candidate in echoesID
+                          if matched in candidate and candidate != matched
+                          and echoCosts.get(str(echoesID[candidate])) == inferred), None)
+        if alternate:
+            logger.debug(f'Correcting {matched!r} to {alternate!r} (main stats say cost {inferred})')
+            matched = alternate
+        cost = inferred
+    if cost not in (1, 3, 4):
+        cost = inferred or 1
 
     return {
         'id': echoesID[matched],
         'name': matched,
         'level': level,
-        'cost': int(cost) if cost else 0,
+        'cost': cost,
         'sonata': sonata,
         'stats': stats
     }
@@ -330,6 +363,7 @@ def scrapeEquippedEchoes(controller: WindowsInputController, screenInfo: ScreenI
     if characters[resonatorID]['level'] < 40:
         return
 
+    sawSwapScreen = False
     for slot, position in enumerate(screenInfo.characters.equipSlots):
         controller.leftClick(position.x, position.y, 1.3)
         image = screenshot(width=screenInfo.width, height=screenInfo.height, monitor=screenInfo.monitor, originX=screenInfo.originX, originY=screenInfo.originY)
@@ -342,7 +376,15 @@ def scrapeEquippedEchoes(controller: WindowsInputController, screenInfo: ScreenI
         # show a toast instead); a blind esc would exit the resonator screen
         marker = recognizeLine(image[int(50 * screenInfo.height / 1080):int(84 * screenInfo.height / 1080), int(screenInfo.width - 470 * screenInfo.height / 1080):int(screenInfo.width - 380 * screenInfo.height / 1080)])
         if echo or '簡' in marker or '略' in marker:
+            sawSwapScreen = True
             controller.pressKey('esc', 1.0)
+
+    if not sawSwapScreen:
+        # the swap screen never opened: this is a trial character
+        # (お試しキャラは音骸の詳細を確認できません) — drop it entirely so
+        # trial presets don't pollute (or overwrite) real roster data
+        logger.debug(f'Dropping trial character recorded as {resonatorID!r}')
+        characters.pop(resonatorID, None)
 
 def scrapeChain(image: np.ndarray, screenInfo: ScreenInfo, characters: dict, resonatorID: str):
     # Activated chain nodes glow cyan on the 3.6 chain screen; classify each

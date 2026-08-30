@@ -19,6 +19,7 @@ from scraping.utils.common import loadFile
 logger = logging.getLogger('EchoScraper')
 
 nameAliases: dict = loadFile('./nameAliases.json')
+echoCosts: dict = loadFile('./data/echoCosts.json')
 
 GRID_ROWS = 4
 

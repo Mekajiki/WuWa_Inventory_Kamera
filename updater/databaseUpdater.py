@@ -322,12 +322,18 @@ class DataUpdater(QObject):
 				weaponsID.update(weapons)
 
 			echoes = {}
+			echoCosts = {}
 			for echoID, info in fetchTable('echo').items():
 				name = str(info.get(lang) or info.get('en') or '')
 				if name:
 					echoes[name.lower().replace(' ', '')] = int(echoID)
+					# intensity encodes the cost tier, verified empirically
+					# against OCR'd costs: 0=軽波級(1), 1=巨浪級(3),
+					# 2=怒涛級(4), 3=海嘯級(4)
+					echoCosts[str(echoID)] = {0: 1, 1: 3, 2: 4, 3: 4}.get(info.get('intensity'), 1)
 			if echoes:
 				self.saveJson(echoes, 'echoes.json')
+				self.saveJson(echoCosts, 'echoCosts.json')
 				echoesID.update(echoes)
 
 			sonatas = []
